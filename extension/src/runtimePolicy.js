@@ -110,7 +110,11 @@ function sanitizedEnvironment(apiKey, sourceEnvironment = process.env) {
 
 function runtimeEnvironment(apiKey, runtimePath, platform = process.platform, sourceEnvironment = process.env) {
   const environment = sanitizedEnvironment(apiKey, sourceEnvironment);
-  const runtimeDirectory = path.dirname(path.resolve(runtimePath));
+  // Resolve with the semantics of the platform being described, not the host's.
+  // A Windows host resolving a POSIX runtime path would otherwise invent a drive
+  // letter and hand the runtime a library directory that does not exist.
+  const platformPath = platform === 'win32' ? path.win32 : path.posix;
+  const runtimeDirectory = platformPath.dirname(platformPath.resolve(runtimePath));
   if (platform === 'linux') {
     environment.LD_LIBRARY_PATH = runtimeDirectory;
   } else if (platform === 'darwin') {

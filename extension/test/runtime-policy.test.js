@@ -82,4 +82,14 @@ test('runtime environment uses only the approved adjacent native-library directo
     DYLD_LIBRARY_PATH: '/tmp/untrusted',
   });
   assert.equal(mac.DYLD_LIBRARY_PATH, '/Applications/LocalCoder');
+
+  // The result must describe the target platform, not the host running the
+  // build. Windows resolves POSIX paths against the current drive, so a
+  // host-relative resolve would leak a drive letter into a Linux library path.
+  const windows = runtimeEnvironment('key', 'C:\\Program Files\\LocalCoder\\llama-server.exe', 'win32', {
+    PATH: 'C:\\Windows',
+  });
+  assert.equal(windows.LD_LIBRARY_PATH, undefined);
+  assert.equal(windows.DYLD_LIBRARY_PATH, undefined);
+  assert.equal(windows.PATH, 'C:\\Windows');
 });
