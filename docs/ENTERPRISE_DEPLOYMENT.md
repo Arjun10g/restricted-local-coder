@@ -1,0 +1,77 @@
+# Enterprise deployment paths
+
+## Path A — approved internal mirror
+
+This is the preferred connected route.
+
+1. On a staging segment allowed to reach ModelScope, acquire the exact file listed in `extension/models/manifest.json`.
+2. Verify its SHA-256 before promotion.
+3. Publish the immutable object under an approved internal **HTTPS directory or reverse proxy** whose final path is `<base>/<manifest fileName>`. Nexus, Artifactory, an authenticated object gateway, or an S3-backed HTTPS proxy all work.
+4. Configure managed VS Code settings:
+
+```json
+{
+  "localCoder.modelMirrorBaseUrl": "https://approved.example/models/local-coder/",
+  "localCoder.network.allowPublicModelDownload": false,
+  "localCoder.runtime.contextSize": 8192,
+  "localCoder.runtime.promptCacheMiB": 512,
+  "localCoder.inlineCompletions.enabled": false,
+  "localCoder.context.maxCharacters": 48000
+}
+```
+
+The extension appends the manifest file name to the base URL. A service that emits a different presigned URL for every object is not a base-directory interface; use a stable reverse proxy or maintain an organization-specific manifest with approved full URLs.
+
+SHA-256 verification is mandatory in the extension and has no user setting that disables it.
+
+## Path B — offline bundle
+
+On a connected, governed staging machine:
+
+```powershell
+.\scripts\New-OfflineBundle.ps1 `
+  -VsixPath .\restricted-local-coder-0.1.0-win32-x64.vsix `
+  -ModelPath .\Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf `
+  -OutputDirectory .\offline-local-coder `
+  -CreateZip
+```
+
+The script verifies the model, copies the VSIX and model, and writes a bundle manifest containing both SHA-256 values. Transfer the bundle through the approved channel, install the VSIX, and run **Local Coder: Import Existing GGUF Model**. The extension performs its own mandatory verification again before first load.
+
+## Path C — direct ModelScope
+
+Keep `localCoder.network.allowPublicModelDownload` enabled and run **Local Coder: Download or Repair Model**. Only the HTTPS URLs checked into the allow-list are used; redirects are rechecked and Hugging Face hosts remain blocked.
+
+This path may fail behind corporate TLS interception, URL categorization, or large-file controls. The internal mirror and offline routes remove that runtime dependency.
+
+## VS Code extension delivery
+
+The native runtime is packaged into the VSIX, making the release platform-specific. Publish each approved artifact to an internal extension gallery or distribute the file through software deployment. The intended laptop uses the `win32-x64` artifact.
+
+The target user does not need administrator rights, Git, CMake, a compiler, Python, Node/npm, Docker, Ollama, or another model manager. The extension is self-contained except for the separately governed GGUF weight file.
+
+## Build and release governance
+
+Treat the extension, native runtime, and model as three governed components:
+
+1. Build from the immutable commit in `vendor/llama.cpp.lock.json`.
+2. Retain the workflow-produced VSIX SHA-256 sidecar.
+3. Scan the VSIX and extracted native binary with normal endpoint and software-composition controls.
+4. Run `scripts/Invoke-SmokeTest.ps1` against the exact model/runtime pair.
+5. Run `scripts/Invoke-ModelBenchmark.ps1` plus organization-specific coding tasks.
+6. Compare quality, first-token latency, total latency, and peak working set against the currently approved pair.
+7. Promote the VSIX and model independently and keep the prior versions for rollback.
+8. Never update an approved model digest merely because a publisher replaced a file under the same name.
+
+## Recommended policy boundary
+
+- Public model download disabled after internal mirroring.
+- 8K context initially, then 16K only after memory measurement.
+- 512 MiB prompt cache or zero where prompt retention is undesirable.
+- Inline completion disabled during the pilot to avoid continuous CPU load.
+- No unmanaged `runtimePath` override in centrally governed deployments.
+- No generated-code execution or automatic file edits outside explicit VS Code editor commands.
+
+## GitHub service compatibility
+
+The checked-in workflows target **GitHub.com or GitHub Enterprise Cloud** and pin current official actions to full commits. Some GitHub Enterprise Server releases do not support the modern artifact service/actions used by the release job. In that case, keep the source validation and native build logic but replace action references with organization-approved GHES mirrors/versions, or run `scripts/Build-Runtime.ps1` and `scripts/Package-Vsix.ps1` on an approved Windows build worker. Do not downgrade action versions blindly; preserve full-commit pinning and the SHA-256 release step.

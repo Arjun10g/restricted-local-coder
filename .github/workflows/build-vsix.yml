@@ -1,0 +1,130 @@
+name: Build platform VSIX
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.runtime_key }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            runtime_key: win32-x64
+            vsce_target: win32-x64
+          - os: ubuntu-24.04
+            runtime_key: linux-x64
+            vsce_target: linux-x64
+          - os: ubuntu-24.04-arm
+            runtime_key: linux-arm64
+            vsce_target: linux-arm64
+          - os: macos-26
+            runtime_key: darwin-arm64
+            vsce_target: darwin-arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Validate source before native build
+        run: npm run validate
+
+      - name: Check out pinned llama.cpp source
+        run: python tools/checkout-runtime-source.py --destination third_party/llama.cpp
+
+      - name: Configure CPU runtime without Web UI downloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S third_party/llama.cpp -B build/llama \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_SERVER=ON \
+            -DLLAMA_BUILD_TOOLS=OFF \
+            -DLLAMA_BUILD_APP=OFF \
+            -DLLAMA_BUILD_UI=OFF \
+            -DLLAMA_USE_PREBUILT_UI=OFF \
+            -DLLAMA_OPENSSL=OFF \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_NATIVE=OFF \
+            -DGGML_BACKEND_DL=ON \
+            -DGGML_CPU_ALL_VARIANTS=ON \
+            -DGGML_CPU_KLEIDIAI=OFF
+
+      - name: Build llama-server
+        shell: bash
+        run: cmake --build build/llama --config Release --target llama-server -j 4
+
+      - name: Collect and execute runtime
+        run: >-
+          python tools/collect-runtime.py
+          --build-dir build/llama
+          --destination extension/runtime/${{ matrix.runtime_key }}
+          --source-dir third_party/llama.cpp
+          --verify
+
+      - name: Package platform-specific VSIX
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./extension/package.json').version")"
+          mkdir -p artifacts
+          cd extension
+          npx --yes @vscode/vsce@3.9.2 package \
+            --target '${{ matrix.vsce_target }}' \
+            --out "../artifacts/restricted-local-coder-${VERSION}-${{ matrix.runtime_key }}.vsix" \
+            --no-dependencies
+          cd ..
+          python - <<'PY'
+          import hashlib, pathlib
+          for file in pathlib.Path('artifacts').glob('*.vsix'):
+              digest = hashlib.sha256(file.read_bytes()).hexdigest()
+              file.with_suffix(file.suffix + '.sha256').write_text(f'{digest}  {file.name}\n', encoding='utf-8')
+              print(file, digest)
+          PY
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: restricted-local-coder-${{ matrix.runtime_key }}
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download every platform artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: restricted-local-coder-*
+          path: release-assets
+          merge-multiple: true
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create '${{ github.ref_name }}'
+          release-assets/*
+          --repo '${{ github.repository }}'
+          --generate-notes
+          --title 'Restricted Local Coder ${{ github.ref_name }}'

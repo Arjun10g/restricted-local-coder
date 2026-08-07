@@ -1,0 +1,48 @@
+name: Validate source
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Use Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Validate policy and tests
+        run: npm run validate
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          find extension/src extension/test tools -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Check Python syntax
+        run: python3 -m py_compile tools/*.py
+      - name: Check shell syntax
+        run: bash -n scripts/build-runtime.sh
+      - name: Parse PowerShell scripts
+        shell: pwsh
+        run: |
+          $Failed = $false
+          Get-ChildItem scripts -Filter '*.ps1' | ForEach-Object {
+            $Tokens = $null
+            $Errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$Tokens, [ref]$Errors) | Out-Null
+            foreach ($ParseError in @($Errors)) {
+              Write-Error "$($_.Name): $($ParseError.Message) at $($ParseError.Extent.StartLineNumber):$($ParseError.Extent.StartColumnNumber)"
+              $Failed = $true
+            }
+          }
+          if ($Failed) { exit 1 }

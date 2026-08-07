@@ -1,0 +1,14 @@
+{
+  "name": "restricted-local-coder-repo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Repository-level validation commands for Restricted Local Coder",
+  "scripts": {
+    "test": "node --test extension/test/*.test.js",
+    "check": "node tools/check-manifest.js && node tools/check-source.js",
+    "validate": "npm run check && npm test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

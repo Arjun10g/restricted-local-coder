@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "verifiedOn": "2026-08-07",
+  "defaultProfile": "qwen3-coder-30b-a3b-iq2m",
+  "prohibitedHosts": [
+    "huggingface.co",
+    "hf.co",
+    "cdn-lfs.huggingface.co"
+  ],
+  "models": [
+    {
+      "id": "qwen3-coder-30b-a3b-iq2m",
+      "displayName": "Qwen3-Coder 30B-A3B — UD-IQ2_M (recommended)",
+      "shortName": "Qwen3-Coder 30B 2-bit",
+      "tier": "recommended",
+      "baseModel": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+      "quantizer": "Unsloth Dynamic GGUF",
+      "quantization": "UD-IQ2_M",
+      "nominalBitClass": "2-bit",
+      "format": "GGUF",
+      "license": "Apache-2.0",
+      "fileName": "Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf",
+      "approximateSizeGiB": 10.9,
+      "expectedBytes": null,
+      "acceptedSha256": [
+        "0a860d0a6876b4c2f8b903aef62eeb020f34c83ae64a1d8e65687c9af0c1d1f5"
+      ],
+      "modelScopeModel": "unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF",
+      "downloadUrls": [
+        "https://www.modelscope.cn/models/unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF/resolve/master/Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf"
+      ],
+      "minimumRamGiB": 24,
+      "recommendedRamGiB": 32,
+      "contextSize": 16384,
+      "batchSize": 512,
+      "ubatchSize": 128,
+      "maxOutputTokens": 2048,
+      "sampling": {
+        "temperature": 0.2,
+        "topP": 0.9,
+        "minP": 0.02,
+        "topK": 40,
+        "repeatPenalty": 1.0
+      },
+      "fim": true,
+      "warning": "Best balance in this repository. It is still an aggressive quantization; use the 4-bit profile when correctness is more important than RAM headroom."
+    },
+    {
+      "id": "qwen3-coder-30b-a3b-tq1",
+      "displayName": "Qwen3-Coder 30B-A3B — UD-TQ1_0 (ternary, experimental)",
+      "shortName": "Qwen3-Coder 30B ternary",
+      "tier": "experimental",
+      "baseModel": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+      "quantizer": "Unsloth Dynamic GGUF",
+      "quantization": "UD-TQ1_0",
+      "nominalBitClass": "ternary / about 1-bit-class",
+      "format": "GGUF",
+      "license": "Apache-2.0",
+      "fileName": "Qwen3-Coder-30B-A3B-Instruct-1M-UD-TQ1_0.gguf",
+      "approximateSizeGiB": 8.1,
+      "expectedBytes": null,
+      "acceptedSha256": [
+        "33d7669a67e1dfdc43136e97757910a2c8a9821f66e71b0bc3cad53d5eb9f6b1",
+        "f2d8e2c93e3b729df4eb27ee97f803ce95c8e498a7535f0da814aa413ddcda65"
+      ],
+      "modelScopeModel": "unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF",
+      "downloadUrls": [
+        "https://www.modelscope.cn/models/unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF/resolve/master/Qwen3-Coder-30B-A3B-Instruct-1M-UD-TQ1_0.gguf"
+      ],
+      "minimumRamGiB": 20,
+      "recommendedRamGiB": 28,
+      "contextSize": 8192,
+      "batchSize": 512,
+      "ubatchSize": 128,
+      "maxOutputTokens": 1536,
+      "sampling": {
+        "temperature": 0.15,
+        "topP": 0.9,
+        "minP": 0.02,
+        "topK": 40,
+        "repeatPenalty": 1.0
+      },
+      "fim": true,
+      "warning": "Use only when footprint is the overriding constraint. Ternary post-training quantization can disproportionately damage coding behavior and MoE experts."
+    },
+    {
+      "id": "qwen3-coder-30b-a3b-q4xl",
+      "displayName": "Qwen3-Coder 30B-A3B — UD-Q4_K_XL (quality-first)",
+      "shortName": "Qwen3-Coder 30B 4-bit",
+      "tier": "quality",
+      "baseModel": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+      "quantizer": "Unsloth Dynamic GGUF",
+      "quantization": "UD-Q4_K_XL",
+      "nominalBitClass": "4-bit",
+      "format": "GGUF",
+      "license": "Apache-2.0",
+      "fileName": "Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q4_K_XL.gguf",
+      "approximateSizeGiB": 17.7,
+      "expectedBytes": null,
+      "acceptedSha256": [
+        "ae28b2a995e1b3c505650bf4c81062090eaec53b7c552b6c5f387924e374d4a0"
+      ],
+      "modelScopeModel": "unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF",
+      "downloadUrls": [
+        "https://www.modelscope.cn/models/unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF/resolve/master/Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q4_K_XL.gguf"
+      ],
+      "minimumRamGiB": 28,
+      "recommendedRamGiB": 32,
+      "contextSize": 8192,
+      "batchSize": 512,
+      "ubatchSize": 128,
+      "maxOutputTokens": 2048,
+      "sampling": {
+        "temperature": 0.2,
+        "topP": 0.9,
+        "minP": 0.02,
+        "topK": 40,
+        "repeatPenalty": 1.0
+      },
+      "fim": true,
+      "warning": "Likely to preserve coding quality better, but leaves less RAM for VS Code, the KV cache, and the operating system. Keep context at 8K initially."
+    },
+    {
+      "id": "qwen3-coder-next-tq1",
+      "displayName": "Qwen3-Coder-Next 80B-A3B — UD-TQ1_0 (edge experiment)",
+      "shortName": "Qwen3-Coder-Next ternary",
+      "tier": "edge",
+      "baseModel": "Qwen/Qwen3-Coder-Next",
+      "quantizer": "Unsloth Dynamic GGUF",
+      "quantization": "UD-TQ1_0",
+      "nominalBitClass": "ternary / about 1-bit-class",
+      "format": "GGUF",
+      "license": "Apache-2.0",
+      "fileName": "Qwen3-Coder-Next-UD-TQ1_0.gguf",
+      "approximateSizeGiB": 18.9,
+      "expectedBytes": null,
+      "acceptedSha256": [
+        "352049921f1dc861bf33fd03f5d2c25a08f248ee808179fe63ce16307357551c"
+      ],
+      "modelScopeModel": "unsloth/Qwen3-Coder-Next-GGUF",
+      "downloadUrls": [
+        "https://www.modelscope.cn/models/unsloth/Qwen3-Coder-Next-GGUF/resolve/master/Qwen3-Coder-Next-UD-TQ1_0.gguf"
+      ],
+      "minimumRamGiB": 32,
+      "recommendedRamGiB": 40,
+      "contextSize": 8192,
+      "batchSize": 256,
+      "ubatchSize": 64,
+      "maxOutputTokens": 1536,
+      "sampling": {
+        "temperature": 1.0,
+        "topP": 0.95,
+        "minP": 0.0,
+        "topK": 40,
+        "repeatPenalty": 1.0
+      },
+      "fim": true,
+      "warning": "Not the default for a 32 GB CPU laptop. The hybrid 80B-total architecture can be slow and leaves little safety margin; keep this for controlled comparison only."
+    }
+  ]
+}

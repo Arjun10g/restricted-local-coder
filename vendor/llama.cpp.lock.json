@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/ggml-org/llama.cpp.git",
+  "tag": "b10307",
+  "commit": "fc3f10b3895ebb0ddfe1fcb7fd5950f2c1719339",
+  "verifiedOn": "2026-08-07",
+  "license": "MIT",
+  "buildTarget": "llama-server",
+  "notes": "Pinned to llama.cpp release b10307 verified on 2026-08-07. Update only after model, security, and extension smoke tests."
+}

@@ -1,0 +1,80 @@
+[
+  {
+    "id": "python-binary-search-repair",
+    "language": "python",
+    "category": "bug-fix",
+    "prompt": "Repair this function. Return only the complete corrected Python function, with no Markdown fences.\n\ndef binary_search(values, target):\n    lo, hi = 0, len(values)\n    while lo < hi:\n        mid = (lo + hi) // 2\n        if values[mid] == target:\n            return mid\n        if values[mid] < target:\n            hi = mid - 1\n        else:\n            lo = mid + 1\n    return -1",
+    "mustMatch": [
+      "def\\s+binary_search\\s*\\(",
+      "while\\s+lo\\s*<=\\s*hi",
+      "values\\[mid\\]\\s*<\\s*target[\\s\\S]{0,120}lo\\s*=\\s*mid\\s*\\+\\s*1",
+      "return\\s+-1"
+    ],
+    "mustNotMatch": ["```"]
+  },
+  {
+    "id": "typescript-safe-cache-read",
+    "language": "typescript",
+    "category": "implementation",
+    "prompt": "Implement this TypeScript function. Return only the function, with no Markdown fences. Requirements: return the cached string when present and unexpired; otherwise return undefined; never throw for a missing key.\n\ntype Entry = { value: string; expiresAt: number };\nfunction readCache(cache: Map<string, Entry>, key: string, now: number): string | undefined {\n  // implement\n}",
+    "mustMatch": [
+      "function\\s+readCache\\s*\\(",
+      "cache\\.get\\s*\\(\\s*key\\s*\\)",
+      "expiresAt",
+      "return\\s+undefined"
+    ],
+    "mustNotMatch": ["throw\\s+new", "```"]
+  },
+  {
+    "id": "javascript-bounded-retry",
+    "language": "javascript",
+    "category": "implementation",
+    "prompt": "Write an async JavaScript function retry(operation, attempts) that calls operation, retries only after rejection, returns the first successful value, and throws the final error after exactly attempts total calls. Reject attempts below 1. Return code only, without Markdown fences.",
+    "mustMatch": [
+      "async\\s+function\\s+retry",
+      "attempts\\s*<\\s*1",
+      "await\\s+operation\\s*\\(",
+      "throw"
+    ],
+    "mustNotMatch": ["while\\s*\\(\\s*true\\s*\\)", "```"]
+  },
+  {
+    "id": "sql-parameterized-query",
+    "language": "sql",
+    "category": "security",
+    "prompt": "A Node.js service currently builds SQL with string concatenation: `SELECT id, email FROM users WHERE email = ' + email`. Provide a parameterized replacement for either node-postgres or sqlite. Return only a concise code snippet, no Markdown fences. The email value must never be interpolated into SQL text.",
+    "mustMatch": [
+      "SELECT\\s+id\\s*,\\s*email\\s+FROM\\s+users\\s+WHERE\\s+email\\s*=",
+      "(\\$1|\\?)",
+      "(query|prepare|execute|all|get|run)"
+    ],
+    "mustNotMatch": ["\\$\\{\\s*email\\s*\\}", "\\+\\s*email", "```"]
+  },
+  {
+    "id": "python-pytest-boundaries",
+    "language": "python",
+    "category": "tests",
+    "prompt": "Write pytest tests for `clamp(value, minimum, maximum)`. Cover below range, both exact boundaries, inside range, and above range. Assume `from app.math_utils import clamp`. Return only the test module, no Markdown fences.",
+    "mustMatch": [
+      "from\\s+app\\.math_utils\\s+import\\s+clamp",
+      "def\\s+test_",
+      "clamp\\s*\\(",
+      "assert"
+    ],
+    "mustNotMatch": ["unittest\\.TestCase", "```"]
+  },
+  {
+    "id": "go-context-cancellation",
+    "language": "go",
+    "category": "concurrency",
+    "prompt": "Implement `func Wait(ctx context.Context, done <-chan struct{}) error` in Go. Return nil when done closes and return ctx.Err() when the context is cancelled first. Return only the function, no Markdown fences.",
+    "mustMatch": [
+      "func\\s+Wait\\s*\\(",
+      "select\\s*\\{",
+      "<-\\s*done",
+      "<-\\s*ctx\\.Done\\s*\\(\\s*\\)",
+      "ctx\\.Err\\s*\\(\\s*\\)"
+    ],
+    "mustNotMatch": ["time\\.Sleep", "```"]
+  }
+]

@@ -1,0 +1,13 @@
+**/.git/**
+**/.github/**
+**/test/**
+**/*.test.js
+**/*.map
+node_modules/**
+models/*.part
+runtime/**/README.md
+!runtime/**/llama-server
+!runtime/**/llama-server.exe
+!runtime/**/*.dll
+!runtime/**/*.so
+!runtime/**/*.dylib

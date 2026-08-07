@@ -1,0 +1,360 @@
+{
+  "name": "restricted-local-coder",
+  "displayName": "Restricted Local Coder",
+  "description": "Self-contained local coding assistant with a bundled llama.cpp runtime and no cloud inference.",
+  "version": "0.1.0",
+  "publisher": "restricted-local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "local ai",
+    "offline",
+    "coding assistant",
+    "gguf",
+    "llama.cpp",
+    "qwen coder"
+  ],
+  "main": "./src/extension.js",
+  "extensionKind": [
+    "ui"
+  ],
+  "activationEvents": [
+    "onView:localCoder.chat",
+    "onCommand:localCoder.openChat",
+    "onCommand:localCoder.start",
+    "onCommand:localCoder.stop",
+    "onCommand:localCoder.restart",
+    "onCommand:localCoder.downloadModel",
+    "onCommand:localCoder.importModel",
+    "onCommand:localCoder.selectModel",
+    "onCommand:localCoder.preflight",
+    "onCommand:localCoder.askSelection",
+    "onCommand:localCoder.explainSelection",
+    "onCommand:localCoder.reviewSelection",
+    "onCommand:localCoder.refactorSelection",
+    "onCommand:localCoder.generateTests",
+    "onCommand:localCoder.debugSelection",
+    "onCommand:localCoder.insertLastResponse",
+    "onCommand:localCoder.replaceSelectionWithLastResponse",
+    "onCommand:localCoder.cancelGeneration",
+    "onCommand:localCoder.showLogs"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "The extension reads workspace source files to construct local model context."
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "localCoder.openChat",
+        "title": "Local Coder: Open Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "localCoder.start",
+        "title": "Local Coder: Start Local Runtime",
+        "icon": "$(play)"
+      },
+      {
+        "command": "localCoder.stop",
+        "title": "Local Coder: Stop Local Runtime",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "localCoder.restart",
+        "title": "Local Coder: Restart Local Runtime",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "localCoder.downloadModel",
+        "title": "Local Coder: Download or Repair Model",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "localCoder.importModel",
+        "title": "Local Coder: Import Existing GGUF Model",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "localCoder.selectModel",
+        "title": "Local Coder: Select Model Profile",
+        "icon": "$(symbol-parameter)"
+      },
+      {
+        "command": "localCoder.preflight",
+        "title": "Local Coder: Run Preflight",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "localCoder.askSelection",
+        "title": "Local Coder: Ask About Selection",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "localCoder.explainSelection",
+        "title": "Local Coder: Explain Selection",
+        "icon": "$(book)"
+      },
+      {
+        "command": "localCoder.reviewSelection",
+        "title": "Local Coder: Review Selection",
+        "icon": "$(inspect)"
+      },
+      {
+        "command": "localCoder.refactorSelection",
+        "title": "Local Coder: Refactor Selection",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "localCoder.generateTests",
+        "title": "Local Coder: Generate Tests for Selection",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "localCoder.debugSelection",
+        "title": "Local Coder: Debug Selection",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "localCoder.insertLastResponse",
+        "title": "Local Coder: Insert Last Response at Cursor",
+        "icon": "$(insert)"
+      },
+      {
+        "command": "localCoder.replaceSelectionWithLastResponse",
+        "title": "Local Coder: Replace Selection with Last Response",
+        "icon": "$(replace)"
+      },
+      {
+        "command": "localCoder.cancelGeneration",
+        "title": "Local Coder: Cancel Generation",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "localCoder.showLogs",
+        "title": "Local Coder: Show Logs",
+        "icon": "$(output)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "localCoder",
+          "title": "Local Coder",
+          "icon": "media/localcoder.svg"
+        }
+      ]
+    },
+    "views": {
+      "localCoder": [
+        {
+          "id": "localCoder.chat",
+          "name": "Private Coding Chat",
+          "type": "webview",
+          "contextualTitle": "Local Coder"
+        }
+      ]
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "localCoder.askSelection",
+          "when": "editorHasSelection",
+          "group": "localCoder@1"
+        },
+        {
+          "command": "localCoder.explainSelection",
+          "when": "editorHasSelection",
+          "group": "localCoder@2"
+        },
+        {
+          "command": "localCoder.reviewSelection",
+          "when": "editorHasSelection",
+          "group": "localCoder@3"
+        },
+        {
+          "command": "localCoder.refactorSelection",
+          "when": "editorHasSelection",
+          "group": "localCoder@4"
+        },
+        {
+          "command": "localCoder.generateTests",
+          "when": "editorHasSelection",
+          "group": "localCoder@5"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "localCoder.start",
+          "when": "view == localCoder.chat",
+          "group": "navigation@1"
+        },
+        {
+          "command": "localCoder.stop",
+          "when": "view == localCoder.chat",
+          "group": "navigation@2"
+        },
+        {
+          "command": "localCoder.selectModel",
+          "when": "view == localCoder.chat",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Restricted Local Coder",
+      "properties": {
+        "localCoder.modelProfile": {
+          "type": "string",
+          "default": "qwen3-coder-30b-a3b-iq2m",
+          "enum": [
+            "qwen3-coder-30b-a3b-iq2m",
+            "qwen3-coder-30b-a3b-tq1",
+            "qwen3-coder-30b-a3b-q4xl",
+            "qwen3-coder-next-tq1"
+          ],
+          "enumDescriptions": [
+            "Recommended 2-bit balance.",
+            "Ternary experimental footprint profile.",
+            "4-bit quality-first profile.",
+            "80B-total hybrid edge experiment."
+          ],
+          "description": "Model profile selected from the checked-in approved manifest."
+        },
+        "localCoder.modelDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "Directory for GGUF files. Empty uses a user-level LocalCoder models directory."
+        },
+        "localCoder.modelMirrorBaseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Approved internal HTTPS base URL. The model file name is appended before public sources are tried."
+        },
+        "localCoder.network.allowPublicModelDownload": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow direct download from non-Hugging-Face public sources listed in the manifest."
+        },
+        "localCoder.runtimePath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional path to a compatible llama-server binary or its directory. Empty uses the binary bundled in the platform VSIX."
+        },
+        "localCoder.runtime.contextSize": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 262144,
+          "description": "Override context size. Zero uses the conservative model-profile default."
+        },
+        "localCoder.runtime.threads": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 256,
+          "description": "CPU generation threads. Zero chooses a conservative automatic value."
+        },
+        "localCoder.runtime.promptCacheMiB": {
+          "type": "integer",
+          "default": 512,
+          "minimum": 0,
+          "maximum": 4096,
+          "description": "Bounded llama-server prompt-cache RAM in MiB. Set to zero to disable; 512 is conservative for a 32 GB laptop."
+        },
+        "localCoder.runtime.port": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Loopback port. Zero selects a free ephemeral port."
+        },
+        "localCoder.runtime.autoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Start the runtime after extension activation when the selected model is already present."
+        },
+        "localCoder.runtime.startupTimeoutSeconds": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 30,
+          "maximum": 1800,
+          "description": "Maximum time to wait for a large model to become ready."
+        },
+        "localCoder.runtime.extraArguments": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional CPU scheduling/warm-up arguments from a strict allow-list; all other llama-server arguments are rejected."
+        },
+        "localCoder.inlineCompletions.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable local fill-in-the-middle inline suggestions. The runtime must already be started."
+        },
+        "localCoder.inlineCompletions.maxTokens": {
+          "type": "integer",
+          "default": 96,
+          "minimum": 16,
+          "maximum": 512,
+          "description": "Maximum tokens for an inline completion."
+        },
+        "localCoder.inlineCompletions.debounceMs": {
+          "type": "integer",
+          "default": 450,
+          "minimum": 100,
+          "maximum": 3000,
+          "description": "Pause before an automatic inline request."
+        },
+        "localCoder.context.maxCharacters": {
+          "type": "integer",
+          "default": 48000,
+          "minimum": 4000,
+          "maximum": 250000,
+          "description": "Maximum workspace context characters sent to the local model per chat request."
+        },
+        "localCoder.context.maxRetrievedFiles": {
+          "type": "integer",
+          "default": 5,
+          "minimum": 0,
+          "maximum": 20,
+          "description": "Maximum lexically selected workspace files added to a chat request."
+        },
+        "localCoder.context.extraFiles": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Workspace-relative glob patterns always considered for chat context, subject to secret/path exclusions."
+        },
+        "localCoder.context.includeDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include active-document diagnostics in local prompts."
+        },
+        "localCoder.chat.maxHistoryTurns": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 0,
+          "maximum": 20,
+          "description": "Recent user/assistant turns retained in extension memory."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "package": "npx --yes @vscode/vsce@3.9.2 package --no-dependencies"
+  }
+}

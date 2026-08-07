@@ -1,0 +1,31 @@
+# Build output
+build/
+dist/
+*.vsix
+*.zip
+
+# Node / editor
+node_modules/
+.vscode-test/
+.DS_Store
+Thumbs.db
+
+# Models and runtime binaries are never committed
+*.gguf
+*.ggml
+extension/runtime/**/llama-server
+extension/runtime/**/llama-server.exe
+extension/runtime/**/*.dll
+extension/runtime/**/*.so
+extension/runtime/**/*.dylib
+!extension/runtime/**/README.md
+
+# Download state
+*.part
+*.download
+*.log
+
+artifacts/
+third_party/
+__pycache__/
+*.pyc
