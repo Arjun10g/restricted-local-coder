@@ -106,6 +106,9 @@ Choose one route:
 1. Set `localCoder.modelMirrorBaseUrl` to an approved internal HTTPS directory and disable public download.
 2. Run **Local Coder: Download or Repair Model** against the checked-in ModelScope URL.
 3. Transfer the exact GGUF offline and run **Local Coder: Import Existing GGUF Model**.
+4. Publish the weights as split GitHub release assets with `scripts/Publish-ModelParts.ps1`, so a
+   workstation that can reach only `github.com` gets source, VSIX, and model from one repository.
+   **Download or Repair Model** reassembles and verifies the parts automatically.
 
 Every route ends in mandatory SHA-256 verification. The extension never contacts Hugging Face.
 

@@ -44,6 +44,59 @@ Keep `localCoder.network.allowPublicModelDownload` enabled and run **Local Coder
 
 This path may fail behind corporate TLS interception, URL categorization, or large-file controls. The internal mirror and offline routes remove that runtime dependency.
 
+## Path D — split parts on GitHub releases
+
+Use this when the workstation may reach `github.com` but not ModelScope, and no
+internal mirror exists. Everything the workstation needs then comes from one
+GitHub repository: source, the platform VSIX, and the weights.
+
+The weight file cannot be committed. Git rejects blobs over 100 MB, Git LFS caps
+a file at 2 GB and bills storage and bandwidth, and a release asset is also
+capped at 2 GB. An 10.9 GB GGUF therefore has to be published as parts.
+
+On the governed staging machine that can reach the model source:
+
+```powershell
+.\scripts\Publish-ModelParts.ps1 `
+  -ModelPath .\Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf `
+  -Repository <owner>/<repo> `
+  -Tag model-iq2m-v1
+```
+
+The script refuses to publish unless the whole-file SHA-256 already matches
+`acceptedSha256` for the profile, splits the file into `.part-NNN` assets below
+the release limit, uploads them to an immutable tag, and prints a `parts` block:
+
+```json
+"parts": {
+  "baseUrls": ["https://github.com/<owner>/<repo>/releases/download/model-iq2m-v1/"],
+  "files": [
+    { "name": "Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf.part-001", "bytes": 1900000000, "sha256": "…" }
+  ]
+}
+```
+
+Paste it into the profile in `extension/models/manifest.json`, run
+`npm run validate`, and rebuild the VSIX. `tools/check-manifest.js` then enforces
+part naming, unique digests, the 2 GB asset ceiling, and that the parts sum to
+the declared model size.
+
+On the workstation, **Local Coder: Download or Repair Model** takes the parted
+route automatically whenever the selected profile declares `parts`:
+
+- parts stream directly into the destination file in order, so peak disk is one
+  model plus the part in flight rather than two copies;
+- each part is verified against its own SHA-256 as it lands, so one bad part is
+  re-fetched alone and is repaired in place without discarding later parts;
+- an interrupted acquisition resumes mid-part with an HTTP `Range` request;
+- a part that 404s or fails verification fails over to the next approved base
+  URL, so a mirror can be listed alongside the release;
+- the assembled file is then checked against the same whole-file SHA-256 the
+  single-file path uses, and quarantined rather than installed if it disagrees.
+
+Setting `localCoder.modelMirrorBaseUrl` adds that mirror ahead of the release
+URL for parts too, so Path A and Path D compose.
+
 ## VS Code extension delivery
 
 The native runtime is packaged into the VSIX, making the release platform-specific. Publish each approved artifact to an internal extension gallery or distribute the file through software deployment. The intended laptop uses the `win32-x64` artifact.

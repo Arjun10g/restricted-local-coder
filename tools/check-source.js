@@ -113,6 +113,7 @@ const requiredFiles = [
   'extension/src/runtimeManager.js', 'extension/src/downloader.js',
   'vendor/llama.cpp.lock.json',
   'bench/coding-smoke.json', 'scripts/Invoke-ModelBenchmark.ps1',
+  'tools/split-model.js', 'scripts/Publish-ModelParts.ps1',
 ];
 for (const relative of requiredFiles) {
   assert.ok(fs.existsSync(path.join(root, relative)), `Missing required file ${relative}`);

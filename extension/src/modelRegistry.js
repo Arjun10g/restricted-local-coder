@@ -4,7 +4,14 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const vscode = require('vscode');
-const { downloadWithResume, validateGgufFile, assertDownloadUrl } = require('./downloader');
+const {
+  assertDownloadUrl,
+  assertPartPlan,
+  downloadPartedModel,
+  downloadWithResume,
+  partUrl,
+  validateGgufFile,
+} = require('./downloader');
 const { modelPath, resolveModelDirectory } = require('./paths');
 const { ensureDir, formatBytes, readJson, safeErrorMessage } = require('./util');
 
@@ -48,6 +55,18 @@ class ModelRegistry {
       }
       for (const url of model.downloadUrls ?? []) {
         assertDownloadUrl(url, prohibitedHosts);
+      }
+      if (model.parts) {
+        const { totalBytes } = assertPartPlan(model.parts.files);
+        if (!Array.isArray(model.parts.baseUrls) || model.parts.baseUrls.length === 0) {
+          throw new Error(`Profile ${model.id} declares parts without an approved base URL`);
+        }
+        for (const base of model.parts.baseUrls) {
+          assertDownloadUrl(partUrl(base, model.parts.files[0].name), prohibitedHosts);
+        }
+        if (Number.isSafeInteger(model.expectedBytes) && model.expectedBytes !== totalBytes) {
+          throw new Error(`Profile ${model.id} part sizes do not sum to its expected byte count`);
+        }
       }
     }
     if (!ids.has(manifest.defaultProfile)) {
@@ -147,6 +166,33 @@ class ModelRegistry {
     return [...new Set(urls)];
   }
 
+  buildPartBaseUrls(profile) {
+    const config = this.configuration();
+    const bases = [];
+    const mirror = config.get('modelMirrorBaseUrl', '').trim();
+    if (mirror) {
+      bases.push(mirror.endsWith('/') ? mirror : `${mirror}/`);
+    }
+    if (config.get('network.allowPublicModelDownload', true)) {
+      bases.push(...(profile.parts?.baseUrls ?? []));
+    }
+    const unique = [...new Set(bases)];
+    for (const base of unique) {
+      assertDownloadUrl(partUrl(base, profile.parts.files[0].name), this.manifest.prohibitedHosts ?? []);
+    }
+    return unique;
+  }
+
+  expectedBytesFor(profile) {
+    if (Number.isSafeInteger(profile.expectedBytes) && profile.expectedBytes > 0) {
+      return profile.expectedBytes;
+    }
+    if (profile.parts?.files?.length) {
+      return assertPartPlan(profile.parts.files).totalBytes;
+    }
+    return null;
+  }
+
   cacheFor(profileId) {
     const cache = this.context.globalState.get(VALIDATION_CACHE_KEY, {});
     return cache?.[profileId] ?? null;
@@ -187,7 +233,7 @@ class ModelRegistry {
 
     try {
       const result = await validateGgufFile(filePath, {
-        expectedBytes: profile.expectedBytes,
+        expectedBytes: this.expectedBytesFor(profile),
         acceptedSha256: profile.acceptedSha256,
         verifySha256,
         signal,
@@ -222,8 +268,9 @@ class ModelRegistry {
   async downloadSelectedModel() {
     const profile = this.getSelectedProfile();
     if (!(await this.ensureLicenseAccepted(profile))) return null;
+    const partBases = profile.parts?.files?.length ? this.buildPartBaseUrls(profile) : [];
     const urls = this.buildDownloadUrls(profile);
-    if (urls.length === 0) {
+    if (partBases.length === 0 && urls.length === 0) {
       throw new Error(
         'No model source is enabled. Configure an approved internal mirror, enable public ModelScope download, or import an existing GGUF.'
       );
@@ -241,10 +288,8 @@ class ModelRegistry {
         token.onCancellationRequested(() => controller.abort(new Error('Model acquisition cancelled')));
         let lastReceived = 0;
         let lastPercent = 0;
-        const result = await downloadWithResume({
-          urls,
+        const shared = {
           destination,
-          expectedBytes: profile.expectedBytes,
           acceptedSha256: profile.acceptedSha256,
           verifySha256: true,
           prohibitedHosts: this.manifest.prohibitedHosts ?? [],
@@ -274,7 +319,11 @@ class ModelRegistry {
               });
             }
           },
-        });
+        };
+        const result =
+          partBases.length > 0
+            ? await downloadPartedModel({ ...shared, parts: profile.parts.files, baseUrls: partBases })
+            : await downloadWithResume({ ...shared, urls, expectedBytes: this.expectedBytesFor(profile) });
         await this.updateValidationCache(profile, destination, result);
         progress.report({ increment: 100, message: 'Verified and ready' });
         vscode.window.showInformationMessage(`${profile.shortName} is verified and ready.`);
@@ -323,7 +372,7 @@ class ModelRegistry {
         },
         async (progress) =>
           validateGgufFile(candidate, {
-            expectedBytes: profile.expectedBytes,
+            expectedBytes: this.expectedBytesFor(profile),
             acceptedSha256: profile.acceptedSha256,
             verifySha256: true,
             onProgress: (state) => {

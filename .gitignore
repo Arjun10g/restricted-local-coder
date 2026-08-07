@@ -13,6 +13,8 @@ Thumbs.db
 # Models and runtime binaries are never committed
 *.gguf
 *.ggml
+# Split model parts produced by tools/split-model.js
+*.part-[0-9][0-9][0-9]
 extension/runtime/**/llama-server
 extension/runtime/**/llama-server.exe
 extension/runtime/**/*.dll
