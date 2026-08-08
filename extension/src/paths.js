@@ -27,6 +27,56 @@ function runtimeFileName(platform = process.platform) {
   return platform === 'win32' ? 'llama-server.exe' : 'llama-server';
 }
 
+// The MSVC C/C++ runtime is not part of Windows itself, unlike the Universal
+// CRT. A locked-down workstation may not have it and cannot install it without
+// administrator rights, so the VSIX carries these beside llama-server.exe.
+const WINDOWS_RUNTIME_LIBRARIES = ['msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'];
+
+function requiredSystemLibraries(platform = process.platform) {
+  return platform === 'win32' ? [...WINDOWS_RUNTIME_LIBRARIES] : [];
+}
+
+async function directoryContains(directory, fileName) {
+  try {
+    const target = fileName.toLowerCase();
+    const entries = await fsp.readdir(directory);
+    return entries.some((entry) => entry.toLowerCase() === target);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Report which required system libraries the runtime would fail to load.
+ *
+ * Windows resolves a DLL from the executable's own directory before the system
+ * directories, so a library shipped in the VSIX satisfies the dependency
+ * without administrator rights. An already-installed redistributable in
+ * System32 satisfies it too.
+ */
+async function missingSystemLibraries(runtimeDirectory, platform = process.platform, environment = process.env) {
+  const required = requiredSystemLibraries(platform);
+  if (required.length === 0) {
+    return [];
+  }
+  const systemRoot = environment.SystemRoot || environment.SYSTEMROOT || 'C:\\Windows';
+  const searchPaths = [runtimeDirectory, path.join(systemRoot, 'System32')];
+  const missing = [];
+  for (const library of required) {
+    let found = false;
+    for (const directory of searchPaths) {
+      if (await directoryContains(directory, library)) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      missing.push(library);
+    }
+  }
+  return missing;
+}
+
 function defaultModelDirectory(platform = process.platform, environment = process.env) {
   if (platform === 'win32') {
     const root = environment.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
@@ -92,10 +142,13 @@ function modelPath(modelDirectory, profile) {
 }
 
 module.exports = {
+  WINDOWS_RUNTIME_LIBRARIES,
   defaultModelDirectory,
   getRuntimeKey,
   isRunnableFile,
+  missingSystemLibraries,
   modelPath,
+  requiredSystemLibraries,
   resolveModelDirectory,
   resolveRuntimeBinary,
   runtimeFileName,

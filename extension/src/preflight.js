@@ -6,7 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { promisify } = require('node:util');
 const vscode = require('vscode');
-const { getRuntimeKey, resolveRuntimeBinary } = require('./paths');
+const { getRuntimeKey, missingSystemLibraries, resolveRuntimeBinary } = require('./paths');
 const { formatBytes, safeErrorMessage } = require('./util');
 const { runtimeEnvironment } = require('./runtimePolicy');
 
@@ -102,12 +102,35 @@ async function runPreflight(context, modelRegistry) {
     }
   }
 
+  let runtimeBinary = null;
   try {
-    const runtime = await resolveRuntimeBinary(context.extensionPath, config.get('runtimePath', ''));
-    const version = await runtimeVersion(runtime);
-    rows.push(row('PASS', 'Native runtime', `${runtime}${version ? ` · ${version}` : ''}`));
+    runtimeBinary = await resolveRuntimeBinary(context.extensionPath, config.get('runtimePath', ''));
+    const version = await runtimeVersion(runtimeBinary);
+    rows.push(row('PASS', 'Native runtime', `${runtimeBinary}${version ? ` · ${version}` : ''}`));
   } catch (error) {
     rows.push(row('FAIL', 'Native runtime', safeErrorMessage(error), 'Install the platform-specific VSIX produced by Build platform VSIX.'));
+  }
+
+  // A missing MSVC runtime otherwise surfaces only as an opaque loader failure,
+  // and an unprivileged user cannot install the redistributable to fix it.
+  if (runtimeBinary) {
+    try {
+      const missing = await missingSystemLibraries(path.dirname(runtimeBinary));
+      if (missing.length === 0) {
+        rows.push(row('PASS', 'System libraries', 'Every required C/C++ runtime library resolves.'));
+      } else {
+        rows.push(
+          row(
+            'FAIL',
+            'System libraries',
+            `Not found beside the runtime or in System32: ${missing.join(', ')}. Windows does not include the MSVC runtime, so llama-server cannot start.`,
+            'Install a VSIX that carries these next to llama-server.exe, or have the Microsoft Visual C++ 2015-2022 Redistributable (x64) deployed.'
+          )
+        );
+      }
+    } catch (error) {
+      rows.push(row('WARN', 'System libraries', safeErrorMessage(error), 'Confirm the MSVC runtime libraries manually.'));
+    }
   }
 
   if (vscode.workspace.isTrusted) {

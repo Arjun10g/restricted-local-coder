@@ -200,6 +200,7 @@ A report opens. Expect at this point:
 | Model file | **WARN — not installed yet** |
 | Free disk | PASS |
 | Native runtime | PASS |
+| System libraries | PASS |
 | Workspace trust | PASS |
 | Prompt cache / Context budget | PASS |
 
@@ -297,7 +298,8 @@ Q4 profile is 17.7 GB and wants a 28 GB minimum — keep context at 8K there.
 | Download stops partway | Network interruption | Re-run **Download or Repair Model**; it resumes |
 | "SHA-256 mismatch" on a part | Corrupt or replaced asset | Re-run; it repairs that part alone. If it persists, the release asset is wrong |
 | "assembled model failed verification" | Wrong model published | The bad file is quarantined as `.invalid-*`. Re-publish from a correctly hashed source |
-| Runtime will not start | Missing native libraries | The VSIX must contain `.dll` files beside `llama-server.exe` |
+| Preflight: System libraries FAIL | MSVC runtime absent | The `win32-x64` VSIX bundles `msvcp140.dll`, `vcruntime140.dll` and `vcruntime140_1.dll` beside `llama-server.exe`. If they are missing, the VSIX was built before that step existed — rebuild it |
+| Runtime will not start, no clear error | Missing native libraries | Run preflight first; the System libraries row names the missing file. All `.dll` files must sit beside `llama-server.exe` |
 | Very slow first response | Weights paging in | Expected on cold start; measure the second run |
 | Sustained page faults | Context or cache too large | Drop to 8K context and 0 prompt cache |
 

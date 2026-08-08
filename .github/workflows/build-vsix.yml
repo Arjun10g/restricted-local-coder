@@ -91,6 +91,43 @@ jobs:
           --source-dir third_party/llama.cpp
           --verify
 
+      # Windows does not ship the MSVC C/C++ runtime, and the target user has no
+      # administrator rights to install the redistributable. Carry it in the
+      # VSIX so the runtime directory is self-contained. Must run after
+      # collect-runtime.py, which clears its destination first.
+      - name: Bundle the app-local MSVC runtime
+        if: matrix.runtime_key == 'win32-x64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $destination = 'extension/runtime/win32-x64'
+          $needed = @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')
+
+          $redist = Get-ChildItem 'C:\Program Files*\Microsoft Visual Studio\*\*\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT' `
+            -Directory -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+          if ($redist) { Write-Host "Redistributable source: $($redist.FullName)" }
+
+          foreach ($name in $needed) {
+            $source = $null
+            if ($redist) {
+              $candidate = Join-Path $redist.FullName $name
+              if (Test-Path -LiteralPath $candidate) { $source = $candidate }
+            }
+            if (-not $source) {
+              $candidate = Join-Path $env:SystemRoot "System32\$name"
+              if (Test-Path -LiteralPath $candidate) { $source = $candidate }
+            }
+            if (-not $source) { throw "Could not locate $name to bundle into the VSIX." }
+            Copy-Item -LiteralPath $source -Destination (Join-Path $destination $name) -Force
+            Write-Host "bundled $name <- $source"
+          }
+
+          foreach ($name in $needed) {
+            if (-not (Test-Path -LiteralPath (Join-Path $destination $name))) {
+              throw "$name is missing from $destination after bundling."
+            }
+          }
+
       - name: Package platform-specific VSIX
         shell: bash
         run: |
