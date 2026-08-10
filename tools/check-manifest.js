@@ -56,6 +56,25 @@ for (const model of manifest.models) {
       `${model.id} draft model needs a byte length`
     );
     assert.notEqual(draft.fileName, model.fileName, `${model.id} draft model must differ from the model`);
+    assert.ok(
+      draft.expectedBytes < model.expectedBytes,
+      `${model.id} draft model is not smaller than the model it drafts for`
+    );
+    // The drafter is fetched over the same path as the weights, so its sources
+    // are held to the same host policy.
+    assert.ok(
+      Array.isArray(draft.downloadUrls) && draft.downloadUrls.length > 0,
+      `${model.id} draft model has no download URL, so it can never be acquired`
+    );
+    for (const rawUrl of draft.downloadUrls) {
+      const url = assertDownloadUrl(rawUrl, manifest.prohibitedHosts);
+      assert.equal(url.protocol, 'https:');
+      assert.ok(APPROVED_MODEL_HOSTS.has(url.hostname), `Unapproved draft host ${url.hostname} in ${model.id}`);
+      assert.ok(
+        url.pathname.endsWith(`/${draft.fileName}`),
+        `${model.id} draft URL does not end in its declared file name`
+      );
+    }
   }
   assert.ok(Array.isArray(model.acceptedSha256) && model.acceptedSha256.length > 0);
   for (const hash of model.acceptedSha256) assert.match(hash, /^[a-f0-9]{64}$/);

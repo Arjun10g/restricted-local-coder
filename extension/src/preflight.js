@@ -38,6 +38,68 @@ async function runtimeVersion(runtimePath) {
   return `${stdout}\n${stderr}`.trim().split(/\r?\n/).slice(0, 3).join(' · ');
 }
 
+/**
+ * Total VRAM per visible NVIDIA device, or null when no usable driver is
+ * present. Absence is a normal CPU-only machine, not an error.
+ */
+async function detectVramGiB() {
+  try {
+    const { stdout } = await execFile(
+      'nvidia-smi',
+      ['--query-gpu=memory.total', '--format=csv,noheader,nounits'],
+      { windowsHide: true, timeout: 10_000, maxBuffer: 256 * 1024 }
+    );
+    const devices = stdout
+      .split(/\r?\n/)
+      .map((line) => Number.parseInt(line.trim(), 10))
+      .filter((value) => Number.isFinite(value) && value > 0)
+      // nvidia-smi reports MiB with nounits.
+      .map((mib) => mib / 1024);
+    return devices.length > 0 ? devices : null;
+  } catch {
+    return null;
+  }
+}
+
+function gpuRow(profile, devices, requested) {
+  if (requested === 'off') {
+    return row('PASS', 'GPU offload', 'Disabled by localCoder.runtime.gpuLayers; generation stays on the CPU.');
+  }
+  const requirement = profile.gpu;
+  if (!devices) {
+    return row(
+      'WARN',
+      'GPU offload',
+      'No NVIDIA device was detected, so every layer runs on the CPU. This is supported but materially slower on a 30B model.',
+      requirement
+        ? `About ${requirement.fullOffloadVramGiB} GiB of VRAM would hold this profile entirely; ${requirement.minVramGiB} GiB gives a partial speed-up.`
+        : 'Expect CPU-speed generation.'
+    );
+  }
+  const largest = Math.max(...devices);
+  const summary = `${devices.length} device(s); largest has ${largest.toFixed(1)} GiB VRAM.`;
+  if (!requirement) {
+    return row('PASS', 'GPU offload', `${summary} Layers are offloaded automatically.`);
+  }
+  if (largest >= requirement.fullOffloadVramGiB) {
+    return row('PASS', 'GPU offload', `${summary} That is enough to hold the whole profile (${requirement.fullOffloadVramGiB} GiB).`);
+  }
+  if (largest >= requirement.minVramGiB) {
+    return row(
+      'WARN',
+      'GPU offload',
+      `${summary} Enough for a partial offload but below the ${requirement.fullOffloadVramGiB} GiB needed to hold the whole profile.`,
+      'Leave gpuLayers on "auto"; llama.cpp places as many layers as fit and runs the rest on the CPU.'
+    );
+  }
+  return row(
+    'WARN',
+    'GPU offload',
+    `${summary} Below the ${requirement.minVramGiB} GiB this profile calls for, so most work stays on the CPU.`,
+    'Set localCoder.runtime.gpuLayers to "off" if partial offload proves slower than pure CPU.'
+  );
+}
+
 async function runPreflight(context, modelRegistry) {
   const rows = [];
   const profile = modelRegistry.getSelectedProfile();
@@ -133,6 +195,42 @@ async function runPreflight(context, modelRegistry) {
     }
   }
 
+  rows.push(gpuRow(profile, await detectVramGiB(), config.get('runtime.gpuLayers', 'auto')));
+
+  if (profile.draftModel) {
+    if (!config.get('runtime.enableDraftModel', true)) {
+      rows.push(row('PASS', 'Draft model', 'Speculative decoding is disabled by localCoder.runtime.enableDraftModel.'));
+    } else {
+      try {
+        const draft = await modelRegistry.validateDraftModel(profile);
+        if (draft?.valid) {
+          rows.push(row('PASS', 'Draft model', `${profile.draftModel.fileName} is present and verified; speculative decoding is active.`));
+        } else {
+          rows.push(
+            row(
+              'WARN',
+              'Draft model',
+              `${profile.draftModel.fileName} is not installed, so generation runs without speculative decoding.`,
+              'Run “Local Coder: Download or Repair Model”, which acquires the optional drafter alongside the weights.'
+            )
+          );
+        }
+      } catch (error) {
+        rows.push(row('WARN', 'Draft model', safeErrorMessage(error), 'Speculative decoding will be skipped.'));
+      }
+    }
+  }
+
+  if (profile.fim === false) {
+    rows.push(
+      row(
+        'PASS',
+        'Inline completion',
+        `${profile.shortName} has no fill-in-the-middle tokens, so inline suggestions stay off for this profile. Chat and the editor commands are unaffected.`
+      )
+    );
+  }
+
   if (vscode.workspace.isTrusted) {
     rows.push(row('PASS', 'Workspace trust', 'The current workspace is trusted.'));
   } else {
@@ -187,4 +285,4 @@ async function runPreflight(context, modelRegistry) {
   return { rows, failures, warnings, markdown };
 }
 
-module.exports = { freeDiskBytes, runPreflight, runtimeVersion };
+module.exports = { detectVramGiB, freeDiskBytes, gpuRow, runPreflight, runtimeVersion };

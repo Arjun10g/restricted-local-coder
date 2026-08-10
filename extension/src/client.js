@@ -44,6 +44,25 @@ function deltaText(delta) {
   return '';
 }
 
+// Qwen's spelling, kept as the fallback because every fill-in-the-middle
+// profile in the manifest today uses it. A profile may override it so a future
+// model with different control tokens needs no code change.
+const DEFAULT_FIM_TEMPLATE = {
+  prefix: '<|fim_prefix|>',
+  suffix: '<|fim_suffix|>',
+  middle: '<|fim_middle|>',
+  stop: ['<|fim_pad|>', '<|fim_prefix|>', '<|fim_suffix|>', '<|fim_middle|>', '<|im_end|>'],
+};
+
+function buildFimPrompt(profile, prefix, suffix) {
+  const template = { ...DEFAULT_FIM_TEMPLATE, ...(profile?.fimTemplate ?? {}) };
+  const stop = Array.isArray(template.stop) && template.stop.length > 0 ? template.stop : DEFAULT_FIM_TEMPLATE.stop;
+  return {
+    prompt: `${template.prefix}${prefix}${template.suffix}${suffix}${template.middle}`,
+    stop,
+  };
+}
+
 class LlamaClient {
   constructor({ baseUrl, apiKey, modelAlias = 'local-coder' }) {
     this.baseUrl = String(baseUrl).replace(/\/$/, '');
@@ -151,7 +170,14 @@ class LlamaClient {
 
   async completeFim({ prefix, suffix, profile, signal, maxTokens = 96 }) {
     throwIfAborted(signal);
-    const prompt = `<|fim_prefix|>${prefix}<|fim_suffix|>${suffix}<|fim_middle|>`;
+    // Sending Qwen control tokens to a model that has none produces confident
+    // nonsense rather than an error, so refuse the request outright instead.
+    if (profile && profile.fim === false) {
+      throw new Error(
+        `${profile.shortName ?? profile.id} has no fill-in-the-middle tokens, so inline completion is unavailable for this profile.`
+      );
+    }
+    const { prompt, stop } = buildFimPrompt(profile, prefix, suffix);
     const sampling = profile?.sampling ?? {};
     const response = await fetch(`${this.baseUrl}/completion`, {
       method: 'POST',
@@ -166,7 +192,7 @@ class LlamaClient {
         min_p: sampling.minP ?? 0.02,
         repeat_penalty: sampling.repeatPenalty ?? 1.0,
         cache_prompt: true,
-        stop: ['<|fim_pad|>', '<|fim_prefix|>', '<|fim_suffix|>', '<|fim_middle|>', '<|im_end|>'],
+        stop,
       }),
       signal,
     });
@@ -198,7 +224,9 @@ class LlamaClient {
 }
 
 module.exports = {
+  DEFAULT_FIM_TEMPLATE,
   LlamaClient,
   LlamaHttpError,
+  buildFimPrompt,
   deltaText,
 };

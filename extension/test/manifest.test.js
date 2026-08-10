@@ -63,11 +63,21 @@ test('a profile without FIM does not claim inline completion, and one remains th
   }
 });
 
-test('a declared draft model is distinct, sized, and hashed', () => {
-  for (const model of manifest.models.filter((entry) => entry.draftModel)) {
+test('a declared draft model is distinct, sized, hashed, and reachable', () => {
+  const drafted = manifest.models.filter((entry) => entry.draftModel);
+  assert.ok(drafted.length > 0, 'no profile declares a drafter, so speculative decoding is dead code');
+  for (const model of drafted) {
     const draft = model.draftModel;
     assert.notEqual(draft.fileName, model.fileName);
     assert.match(draft.sha256, /^[a-f0-9]{64}$/);
     assert.ok(draft.expectedBytes > 0 && draft.expectedBytes < model.expectedBytes);
+    // Without a source the drafter can never be installed, and the runtime
+    // silently falls back to plain decoding forever.
+    assert.ok(Array.isArray(draft.downloadUrls) && draft.downloadUrls.length > 0, `${model.id} drafter has no source`);
+    for (const url of draft.downloadUrls) {
+      const parsed = assertDownloadUrl(url, manifest.prohibitedHosts);
+      assert.equal(parsed.protocol, 'https:');
+      assert.ok(parsed.pathname.endsWith(`/${draft.fileName}`));
+    }
   }
 });

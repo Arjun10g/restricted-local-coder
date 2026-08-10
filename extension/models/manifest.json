@@ -46,6 +46,9 @@
         "fileName": "dflash-kquant.gguf",
         "sha256": "27d9a805fa29b943cfb6ad4843367cd4eaaaf06bd452d8cc3e00a2cd18a677bc",
         "expectedBytes": 1631205312,
+        "downloadUrls": [
+          "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/dflash-kquant.gguf"
+        ],
         "optional": true
       },
       "gpu": {
@@ -92,6 +95,9 @@
         "fileName": "dflash-kquant.gguf",
         "sha256": "27d9a805fa29b943cfb6ad4843367cd4eaaaf06bd452d8cc3e00a2cd18a677bc",
         "expectedBytes": 1631205312,
+        "downloadUrls": [
+          "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/dflash-kquant.gguf"
+        ],
         "optional": true
       },
       "gpu": {

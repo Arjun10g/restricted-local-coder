@@ -293,6 +293,28 @@
           "maximum": 1800,
           "description": "Maximum time to wait for a large model to become ready."
         },
+        "localCoder.runtime.gpuLayers": {
+          "type": [
+            "string",
+            "integer"
+          ],
+          "default": "auto",
+          "minimum": 0,
+          "maximum": 999,
+          "description": "Layers to offload to the GPU. \"auto\" offloads as many as the device holds, \"off\" keeps generation entirely on the CPU, and a number pins the count. A machine with no usable GPU falls back to the CPU on its own."
+        },
+        "localCoder.runtime.enableDraftModel": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use the profile's draft model for speculative decoding when it is installed. Profiles that declare no drafter, and installations where the drafter file is absent, ignore this setting."
+        },
+        "localCoder.runtime.draftMaxTokens": {
+          "type": "integer",
+          "default": 16,
+          "minimum": 1,
+          "maximum": 64,
+          "description": "Maximum tokens the draft model proposes per step. Higher values help when the drafter agrees often and cost throughput when it does not."
+        },
         "localCoder.runtime.extraArguments": {
           "type": "array",
           "default": [],

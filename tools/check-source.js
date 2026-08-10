@@ -15,6 +15,17 @@ assert.equal(packageJson.capabilities?.untrustedWorkspaces?.supported, false);
 const settings = packageJson.contributes?.configuration?.properties ?? {};
 assert.ok(settings['localCoder.runtime.promptCacheMiB'], 'Bounded prompt-cache setting is missing');
 assert.ok(!settings['localCoder.download.verifySha256'], 'Model hash verification must not be user-disableable');
+// Flags the runtime passes must be reachable from the Settings UI, or a user has
+// no way to turn off an offload that hurts on their hardware.
+for (const declared of [
+  'localCoder.runtime.gpuLayers',
+  'localCoder.runtime.enableDraftModel',
+  'localCoder.runtime.draftMaxTokens',
+]) {
+  assert.ok(settings[declared], `${declared} is used by the runtime but not declared in package.json`);
+}
+assert.equal(settings['localCoder.runtime.gpuLayers'].default, 'auto');
+assert.equal(settings['localCoder.runtime.draftMaxTokens'].maximum, 64);
 assert.ok(!JSON.stringify(packageJson).includes('REPLACE_ME'), 'Placeholder repository metadata must be removed');
 
 const runtime = fs.readFileSync(path.join(extensionRoot, 'src', 'runtimeManager.js'), 'utf8');

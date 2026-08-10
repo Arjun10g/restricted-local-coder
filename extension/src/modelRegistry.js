@@ -56,6 +56,21 @@ class ModelRegistry {
       for (const url of model.downloadUrls ?? []) {
         assertDownloadUrl(url, prohibitedHosts);
       }
+      if (model.draftModel) {
+        const draft = model.draftModel;
+        if (!draft.fileName || path.basename(draft.fileName) !== draft.fileName || !draft.fileName.endsWith('.gguf')) {
+          throw new Error(`Unsafe draft model file name in profile ${model.id}`);
+        }
+        if (draft.fileName === model.fileName) {
+          throw new Error(`Profile ${model.id} points its draft model at the main weights`);
+        }
+        if (!/^[a-f0-9]{64}$/i.test(draft.sha256 ?? '')) {
+          throw new Error(`Draft model in profile ${model.id} does not have an approved SHA-256`);
+        }
+        for (const url of draft.downloadUrls ?? []) {
+          assertDownloadUrl(url, prohibitedHosts);
+        }
+      }
       if (model.parts) {
         const { totalBytes } = assertPartPlan(model.parts.files);
         if (!Array.isArray(model.parts.baseUrls) || model.parts.baseUrls.length === 0) {
@@ -193,6 +208,73 @@ class ModelRegistry {
     return null;
   }
 
+  /**
+   * The drafter is a second GGUF that lives beside the weights, so it is
+   * expressed as a minimal profile and reuses the same mirror resolution,
+   * resume, and digest machinery rather than growing a parallel download path.
+   */
+  draftProfileFor(profile) {
+    const draft = profile?.draftModel;
+    if (!draft) return null;
+    return {
+      id: `${profile.id}#draft`,
+      shortName: `${profile.shortName} drafter`,
+      fileName: draft.fileName,
+      acceptedSha256: [draft.sha256],
+      expectedBytes: draft.expectedBytes,
+      downloadUrls: draft.downloadUrls ?? [],
+      license: profile.license,
+      optional: draft.optional !== false,
+    };
+  }
+
+  async validateDraftModel(profile = this.getSelectedProfile()) {
+    const draft = this.draftProfileFor(profile);
+    if (!draft) return null;
+    return this.validateModel(draft, { full: false });
+  }
+
+  /**
+   * Acquiring the drafter must never fail the run: speculative decoding is a
+   * throughput optimization, and the runtime already falls back to plain
+   * decoding when the file is absent.
+   */
+  async downloadDraftModel(profile, progress, signal) {
+    const draft = this.draftProfileFor(profile);
+    if (!draft) return null;
+    const existing = await this.validateModel(draft, { full: false });
+    if (existing.valid) {
+      this.output.appendLine(`[model] Draft model ${draft.fileName} is already present and verified`);
+      return existing;
+    }
+    const urls = this.buildDownloadUrls(draft);
+    if (urls.length === 0) {
+      this.output.appendLine(`[model] No enabled source for draft model ${draft.fileName}; speculative decoding stays off`);
+      return null;
+    }
+    const destination = await this.getModelPath(draft);
+    progress?.report({ message: `Acquiring optional draft model ${draft.fileName}` });
+    const result = await downloadWithResume({
+      urls,
+      destination,
+      expectedBytes: this.expectedBytesFor(draft),
+      acceptedSha256: draft.acceptedSha256,
+      verifySha256: true,
+      prohibitedHosts: this.manifest.prohibitedHosts ?? [],
+      signal,
+      logger: (message) => this.output.appendLine(`[model:draft] ${message}`),
+      onProgress: (state) => {
+        if (state.phase === 'downloading') {
+          progress?.report({
+            message: `Draft model: ${formatBytes(state.received ?? 0)}${state.total ? ` / ${formatBytes(state.total)}` : ''}`,
+          });
+        }
+      },
+    });
+    await this.updateValidationCache(draft, destination, result);
+    return result;
+  }
+
   cacheFor(profileId) {
     const cache = this.context.globalState.get(VALIDATION_CACHE_KEY, {});
     return cache?.[profileId] ?? null;
@@ -325,8 +407,25 @@ class ModelRegistry {
             ? await downloadPartedModel({ ...shared, parts: profile.parts.files, baseUrls: partBases })
             : await downloadWithResume({ ...shared, urls, expectedBytes: this.expectedBytesFor(profile) });
         await this.updateValidationCache(profile, destination, result);
+
+        // The weights are already verified at this point, so a drafter problem
+        // is reported and stepped over rather than discarding the large download.
+        let draftResult = null;
+        if (profile.draftModel && this.configuration().get('runtime.enableDraftModel', true)) {
+          try {
+            draftResult = await this.downloadDraftModel(profile, progress, controller.signal);
+          } catch (error) {
+            this.output.appendLine(`[model] Optional draft model failed: ${safeErrorMessage(error)}`);
+            vscode.window.showWarningMessage(
+              `${profile.shortName} is ready, but its optional draft model could not be acquired. Generation will run without speculative decoding.`
+            );
+          }
+        }
+
         progress.report({ increment: 100, message: 'Verified and ready' });
-        vscode.window.showInformationMessage(`${profile.shortName} is verified and ready.`);
+        vscode.window.showInformationMessage(
+          `${profile.shortName} is verified and ready.${draftResult ? ' The draft model is installed, so speculative decoding is available.' : ''}`
+        );
         return result;
       }
     );

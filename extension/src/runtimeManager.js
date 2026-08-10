@@ -76,16 +76,37 @@ class RuntimeManager {
    * removed upstream in favour of `--spec-draft-n-max` and `--spec-draft-n-min`,
    * so the older spellings are silently rejected.
    */
+  /**
+   * Returns the --n-gpu-layers value, or null to omit the flag entirely.
+   *
+   * An unparseable setting falls back to "auto" and says so, because silently
+   * treating a typo as zero would look like a machine that lost its GPU.
+   */
+  resolveGpuLayers(requested) {
+    if (requested === 'off') return null;
+    if (requested === 'auto' || requested === undefined || requested === null || requested === '') {
+      // -1 lets llama.cpp place as many layers as the device holds, which is the
+      // right default when VRAM is unknown, and is a no-op without a GPU.
+      return '-1';
+    }
+    const parsed = Number(requested);
+    if (!Number.isFinite(parsed)) {
+      this.output.appendLine(
+        `[runtime] localCoder.runtime.gpuLayers is "${requested}", which is not "auto", "off", or a number; using auto`
+      );
+      return '-1';
+    }
+    return String(clampInteger(parsed, 0, 999, 0));
+  }
+
   accelerationArguments(modelFile, profile) {
     const config = this.config();
     const args = [];
 
     const requested = config.get('runtime.gpuLayers', 'auto');
-    if (requested !== 'off') {
-      // "auto" lets llama.cpp place as many layers as the device holds, which is
-      // the right default when VRAM is unknown; a number pins it explicitly.
-      const layers = requested === 'auto' ? '-1' : String(clampInteger(requested, 0, 999, 0));
-      args.push('--n-gpu-layers', layers);
+    const offload = this.resolveGpuLayers(requested);
+    if (offload !== null) {
+      args.push('--n-gpu-layers', offload);
     }
 
     const draft = profile.draftModel;
@@ -95,7 +116,9 @@ class RuntimeManager {
       if (fs.existsSync(draftFile)) {
         args.push('--model-draft', draftFile);
         args.push('--spec-draft-n-max', String(clampInteger(config.get('runtime.draftMaxTokens', 16), 1, 64, 16)));
-        if (requested !== 'off') {
+        // A drafter left on the CPU while the main model is on the GPU is
+        // usually slower than no speculation at all.
+        if (offload !== null) {
           args.push('--n-gpu-layers-draft', '-1');
         }
       } else {
