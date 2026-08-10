@@ -3,7 +3,7 @@
 An empty Windows machine to a working private coding assistant. Every command is
 literal and copy-pasteable; nothing needs substituting.
 
-If you only read one section, read [Section 2](#2-the-fast-path-one-command).
+If you only read one section, read [Section 2](#2-the-fast-path--one-command).
 
 ---
 
@@ -11,15 +11,15 @@ If you only read one section, read [Section 2](#2-the-fast-path-one-command).
 
 - [0. What you are installing](#0-what-you-are-installing)
 - [1. Before you start](#1-before-you-start)
-- [2. The fast path — one command](#2-the-fast-path-one-command)
-- [3. The manual path — every step](#3-the-manual-path-every-step)
+- [2. The fast path — one command](#2-the-fast-path--one-command)
+- [3. The manual path — every step](#3-the-manual-path--every-step)
 - [4. Settings](#4-settings)
 - [5. Get the model](#5-get-the-model)
 - [6. Start it](#6-start-it)
 - [7. Prove it works](#7-prove-it-works)
 - [8. Find the real context limit](#8-find-the-real-context-limit)
-- [9. Optional — agent mode](#9-optional-agent-mode)
-- [10. Optional — measure quality](#10-optional-measure-quality)
+- [9. Optional — agent mode](#9-optional--agent-mode)
+- [10. Optional — measure quality](#10-optional--measure-quality)
 - [11. Troubleshooting](#11-troubleshooting)
 - [12. Reference values](#12-reference-values)
 - [13. Starting completely over](#13-starting-completely-over)
@@ -359,7 +359,7 @@ Start read-only. It cannot cause any effect outside the editor:
 | `confirm` | the above, plus any command, each needing a modal confirmation |
 
 Before allowing commands, check the model can even produce the right shape — see
-[Section 10](#10-optional-measure-quality). A model that emits one shell string
+[Section 10](#10-optional--measure-quality). A model that emits one shell string
 instead of separate arguments will have every command rejected.
 
 To allow commands:
