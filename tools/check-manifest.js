@@ -13,7 +13,17 @@ const root = path.resolve(__dirname, '..');
 const manifestPath = path.join(root, 'extension', 'models', 'manifest.json');
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 
-assert.equal(manifest.schemaVersion, 1, 'Unsupported manifest schema');
+assert.equal(manifest.schemaVersion, 2, 'Unsupported manifest schema');
+
+// Weights may be served from any of these; Hugging Face stays prohibited and is
+// checked separately through prohibitedHosts.
+const APPROVED_MODEL_HOSTS = new Set([
+  'www.modelscope.cn',
+  'storage.googleapis.com',
+  'github.com',
+  'objects.githubusercontent.com',
+  'release-assets.githubusercontent.com',
+]);
 assert.match(manifest.verifiedOn, /^\d{4}-\d{2}-\d{2}$/);
 assert.ok(Array.isArray(manifest.prohibitedHosts) && manifest.prohibitedHosts.length > 0);
 assert.ok(Array.isArray(manifest.models) && manifest.models.length > 0);
@@ -33,14 +43,27 @@ for (const model of manifest.models) {
   assert.ok(model.contextSize >= 2048 && model.contextSize <= 32768, `${model.id} has an unsafe default context`);
   assert.ok(model.batchSize >= model.ubatchSize);
   assert.ok(model.maxOutputTokens > 0);
-  assert.equal(model.fim, true, `${model.id} is not marked FIM-capable`);
+  // Fill-in-the-middle is no longer universal: agentic chat models ship without
+  // FIM tokens, so inline completion is driven per profile rather than assumed.
+  assert.equal(typeof model.fim, 'boolean', `${model.id} must state whether it supports FIM`);
+
+  if (model.draftModel) {
+    const draft = model.draftModel;
+    assert.match(draft.fileName, /^[^/\\]+\.gguf$/i, `${model.id} draft model has an unsafe fileName`);
+    assert.match(draft.sha256, /^[a-f0-9]{64}$/, `${model.id} draft model needs a SHA-256`);
+    assert.ok(
+      Number.isSafeInteger(draft.expectedBytes) && draft.expectedBytes > 0,
+      `${model.id} draft model needs a byte length`
+    );
+    assert.notEqual(draft.fileName, model.fileName, `${model.id} draft model must differ from the model`);
+  }
   assert.ok(Array.isArray(model.acceptedSha256) && model.acceptedSha256.length > 0);
   for (const hash of model.acceptedSha256) assert.match(hash, /^[a-f0-9]{64}$/);
   assert.ok(Array.isArray(model.downloadUrls) && model.downloadUrls.length > 0);
   for (const rawUrl of model.downloadUrls) {
     const url = assertDownloadUrl(rawUrl, manifest.prohibitedHosts);
     assert.equal(url.protocol, 'https:');
-    assert.equal(url.hostname, 'www.modelscope.cn', `Unexpected public host in ${model.id}`);
+    assert.ok(APPROVED_MODEL_HOSTS.has(url.hostname), `Unapproved model host ${url.hostname} in ${model.id}`);
     assert.ok(url.pathname.endsWith(`/${model.fileName}`));
   }
 
@@ -86,6 +109,16 @@ for (const model of manifest.models) {
 assert.ok(ids.has(manifest.defaultProfile), 'Default profile does not exist');
 const recommended = manifest.models.find((model) => model.id === manifest.defaultProfile);
 assert.equal(recommended.tier, 'recommended');
-assert.equal(recommended.nominalBitClass, '2-bit');
+// The default no longer has to be an aggressive 2-bit squeeze; what matters is
+// that it still fits the 32 GB target with room for the KV cache, the editor,
+// and the operating system.
+assert.ok(
+  ['2-bit', '4-bit'].includes(recommended.nominalBitClass),
+  `Default profile bit class ${recommended.nominalBitClass} is outside the approved range`
+);
+assert.ok(
+  recommended.approximateSizeGiB <= 20,
+  `Default profile is ${recommended.approximateSizeGiB} GiB, above the 20 GiB ceiling for a 32 GB machine`
+);
 
 console.log(`Manifest OK: ${manifest.models.length} approved profiles; default=${manifest.defaultProfile}`);

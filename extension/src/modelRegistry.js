@@ -32,7 +32,7 @@ class ModelRegistry {
   }
 
   validateManifest(manifest) {
-    if (manifest?.schemaVersion !== 1 || !Array.isArray(manifest.models) || manifest.models.length === 0) {
+    if (manifest?.schemaVersion !== 2 || !Array.isArray(manifest.models) || manifest.models.length === 0) {
       throw new Error('The bundled model manifest is missing or unsupported');
     }
     const ids = new Set();

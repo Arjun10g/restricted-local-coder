@@ -1,13 +1,105 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "verifiedOn": "2026-08-10",
-  "defaultProfile": "qwen3-coder-30b-a3b-iq2m",
+  "defaultProfile": "muse-glimmer-30b-kquant",
   "prohibitedHosts": [
     "huggingface.co",
     "hf.co",
     "cdn-lfs.huggingface.co"
   ],
   "models": [
+    {
+      "id": "muse-glimmer-30b-kquant",
+      "displayName": "Muse Glimmer 30B — kquant (recommended)",
+      "shortName": "Muse Glimmer 30B",
+      "tier": "recommended",
+      "baseModel": "meta-models/Muse-Glimmer-30B",
+      "quantizer": "Publisher GGUF",
+      "quantization": "kquant",
+      "nominalBitClass": "4-bit",
+      "format": "GGUF",
+      "license": "Apache-2.0",
+      "fileName": "muse-glimmer-30B-kquant-17gb.gguf",
+      "approximateSizeGiB": 15.61,
+      "expectedBytes": 16756681056,
+      "acceptedSha256": [
+        "7e9b74b7c8875e9e265695df9613bf6290f2392e479ce740495a129019c488d8"
+      ],
+      "downloadUrls": [
+        "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/muse-glimmer-30B-kquant-17gb.gguf"
+      ],
+      "minimumRamGiB": 24,
+      "recommendedRamGiB": 32,
+      "contextSize": 16384,
+      "batchSize": 512,
+      "ubatchSize": 128,
+      "maxOutputTokens": 2048,
+      "sampling": {
+        "temperature": 1.0,
+        "topP": 0.95,
+        "minP": 0.0,
+        "topK": 64,
+        "repeatPenalty": 1.0
+      },
+      "fim": false,
+      "draftModel": {
+        "fileName": "dflash-kquant.gguf",
+        "sha256": "27d9a805fa29b943cfb6ad4843367cd4eaaaf06bd452d8cc3e00a2cd18a677bc",
+        "expectedBytes": 1631205312,
+        "optional": true
+      },
+      "gpu": {
+        "minVramGiB": 8,
+        "fullOffloadVramGiB": 20
+      },
+      "warning": "Agentic chat model with no fill-in-the-middle tokens, so inline completion stays with a Qwen profile. contextSize is set conservatively at 16384 and must be reconciled against n_ctx_train in the llama-server startup log before being raised."
+    },
+    {
+      "id": "muse-glimmer-30b-kquant-dynamic",
+      "displayName": "Muse Glimmer 30B — kquant dynamic (quality)",
+      "shortName": "Muse Glimmer 30B dynamic",
+      "tier": "quality",
+      "baseModel": "meta-models/Muse-Glimmer-30B",
+      "quantizer": "Publisher GGUF",
+      "quantization": "kquant-dynamic",
+      "nominalBitClass": "4-bit",
+      "format": "GGUF",
+      "license": "Apache-2.0",
+      "fileName": "muse-glimmer-30B-kquant-dynamic.gguf",
+      "approximateSizeGiB": 18.3,
+      "expectedBytes": 19653957984,
+      "acceptedSha256": [
+        "513109c8319115f69eb09fb7b118c97c8167d15bc014fd7670d2e30489bf106c"
+      ],
+      "downloadUrls": [
+        "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/muse-glimmer-30B-kquant-dynamic.gguf"
+      ],
+      "minimumRamGiB": 28,
+      "recommendedRamGiB": 32,
+      "contextSize": 8192,
+      "batchSize": 512,
+      "ubatchSize": 128,
+      "maxOutputTokens": 2048,
+      "sampling": {
+        "temperature": 1.0,
+        "topP": 0.95,
+        "minP": 0.0,
+        "topK": 64,
+        "repeatPenalty": 1.0
+      },
+      "fim": false,
+      "draftModel": {
+        "fileName": "dflash-kquant.gguf",
+        "sha256": "27d9a805fa29b943cfb6ad4843367cd4eaaaf06bd452d8cc3e00a2cd18a677bc",
+        "expectedBytes": 1631205312,
+        "optional": true
+      },
+      "gpu": {
+        "minVramGiB": 12,
+        "fullOffloadVramGiB": 24
+      },
+      "warning": "Larger dynamic quantization for quality comparison. At 18.3 GiB it leaves materially less headroom on a 32 GB machine; keep context at 8192 until memory has been measured."
+    },
     {
       "id": "qwen3-coder-30b-a3b-iq2m",
       "displayName": "Qwen3-Coder 30B-A3B — UD-IQ2_M (recommended)",

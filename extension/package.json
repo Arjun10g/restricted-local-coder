@@ -214,15 +214,19 @@
       "properties": {
         "localCoder.modelProfile": {
           "type": "string",
-          "default": "qwen3-coder-30b-a3b-iq2m",
+          "default": "muse-glimmer-30b-kquant",
           "enum": [
+            "muse-glimmer-30b-kquant",
+            "muse-glimmer-30b-kquant-dynamic",
             "qwen3-coder-30b-a3b-iq2m",
             "qwen3-coder-30b-a3b-tq1",
             "qwen3-coder-30b-a3b-q4xl",
             "qwen3-coder-next-tq1"
           ],
           "enumDescriptions": [
-            "Recommended 2-bit balance.",
+            "Recommended. Agentic chat model, no fill-in-the-middle.",
+            "Larger dynamic quantization for quality comparison.",
+            "2-bit Qwen coder; retains fill-in-the-middle for inline completion.",
             "Ternary experimental footprint profile.",
             "4-bit quality-first profile.",
             "80B-total hybrid edge experiment."
