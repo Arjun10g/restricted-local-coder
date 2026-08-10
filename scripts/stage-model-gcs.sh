@@ -19,6 +19,8 @@ BUCKET=""
 PROFILE_ID=""
 WORKDIR="${TMPDIR:-/tmp}/local-coder-staging"
 KEEP=false
+SOURCE_URL=""
+DRAFT=false
 
 usage() {
   cat >&2 <<USAGE
@@ -38,6 +40,8 @@ while [ $# -gt 0 ]; do
     --profile) PROFILE_ID="${2:?}"; shift 2 ;;
     --workdir) WORKDIR="${2:?}"; shift 2 ;;
     --keep) KEEP=true; shift ;;
+    --source-url) SOURCE_URL="${2:?}"; shift 2 ;;
+    --draft) DRAFT=true; shift ;;
     -h|--help) usage ;;
     *) echo "Unknown argument: $1" >&2; usage ;;
   esac
@@ -56,7 +60,7 @@ for tool in python3 curl gcloud; do
 done
 
 read -r PROFILE_ID FILE_NAME EXPECTED_SHA SIZE_GIB EXPECTED_BYTES DOWNLOAD_URL <<EOF
-$(python3 - "$MANIFEST" "${PROFILE_ID}" <<'PY'
+$(python3 - "$MANIFEST" "${PROFILE_ID}" "$($DRAFT && echo draft || echo main)" <<'PY'
 import json, sys
 manifest = json.load(open(sys.argv[1]))
 wanted = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else manifest["defaultProfile"]
@@ -66,8 +70,19 @@ if profile is None:
 urls = profile.get("downloadUrls") or []
 if not urls:
     sys.exit("Profile has no download URL: %s" % wanted)
-print(profile["id"], profile["fileName"], profile["acceptedSha256"][0],
-      profile["approximateSizeGiB"], profile.get("expectedBytes") or 0, urls[0])
+draft = profile.get("draftModel") or {}
+want_draft = sys.argv[3] == "draft" if len(sys.argv) > 3 else False
+if want_draft:
+    if not draft:
+        sys.exit("Profile %s declares no draft model" % profile["id"])
+    name, digest = draft["fileName"], draft["sha256"]
+    expected = draft["expectedBytes"]
+else:
+    name, digest = profile["fileName"], profile["acceptedSha256"][0]
+    expected = profile.get("expectedBytes") or 0
+print(profile["id"], name, digest,
+      round(expected / 1024 ** 3, 2) if expected else profile["approximateSizeGiB"],
+      expected, urls[0])
 PY
 )
 EOF
@@ -105,7 +120,9 @@ if [ "$EXPECTED_BYTES" -gt 0 ] && [ "$CURRENT_BYTES" -eq "$EXPECTED_BYTES" ]; th
   echo "==> Already downloaded ($CURRENT_BYTES bytes); skipping transfer"
 else
   echo "==> Downloading (resumable)"
-  curl -fL --retry 5 --retry-delay 5 -C - -o "$MODEL" "$DOWNLOAD_URL"
+  # --source-url exists for the first publish, when the manifest already points
+  # at the mirror the file is about to be uploaded to.
+  curl -fL --retry 5 --retry-delay 5 -C - -o "$MODEL" "${SOURCE_URL:-$DOWNLOAD_URL}"
   if [ "$EXPECTED_BYTES" -gt 0 ]; then
     GOT="$(stat -c %s "$MODEL" 2>/dev/null || stat -f %z "$MODEL")"
     if [ "$GOT" -ne "$EXPECTED_BYTES" ]; then
