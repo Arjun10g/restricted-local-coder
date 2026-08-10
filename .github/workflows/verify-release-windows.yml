@@ -1,0 +1,102 @@
+name: Verify a published Windows release
+
+# Proves that a release asset actually starts on a Windows machine that has
+# nothing but Windows on its PATH. The regular build job runs llama-server on
+# the runner with its full developer toolchain visible, which is precisely how
+# a missing libomp140.x86_64.dll went unnoticed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version to verify, without the leading v
+        required: true
+        default: '0.3.1'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download and verify the published VSIX
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          $name = "restricted-local-coder-$env:VERSION-win32-x64.vsix"
+          $base = "https://github.com/${{ github.repository }}/releases/download/v$env:VERSION"
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Invoke-WebRequest -Uri "$base/$name" -OutFile "artifacts/$name" -UseBasicParsing
+
+          $sidecar = (Invoke-WebRequest -Uri "$base/$name.sha256" -UseBasicParsing).Content
+          if ($sidecar -is [byte[]]) { $sidecar = [System.Text.Encoding]::UTF8.GetString($sidecar) }
+          $expected = (([string]$sidecar -split '\s+') | Where-Object { $_ })[0]
+          $actual = (Get-FileHash "artifacts/$name" -Algorithm SHA256).Hash.ToLower()
+          "expected $expected"
+          "actual   $actual"
+          if ($actual -ne $expected.ToLower()) { throw 'Published VSIX does not match its sidecar digest.' }
+
+      - name: Unpack it the way VS Code would
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $name = "restricted-local-coder-$env:VERSION-win32-x64.vsix"
+          # Install outside the workspace, so nothing in the checkout can satisfy
+          # a dependency by accident.
+          $install = Join-Path $env:TEMP 'localcoder-install'
+          Remove-Item -Recurse -Force $install -ErrorAction SilentlyContinue
+          Expand-Archive -Path "artifacts/$name" -DestinationPath $install -Force
+          $runtime = Join-Path $install 'extension\runtime\win32-x64'
+          "runtime: $runtime"
+          Get-ChildItem $runtime | Select-Object Name, Length | Format-Table -AutoSize
+          "LOCALCODER_RUNTIME=$runtime" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Check every import resolves
+        run: >-
+          python tools/fetch-runtime.py
+          --key win32-x64
+          --destination "${{ env.LOCALCODER_RUNTIME }}"
+          --check-dependencies-only
+
+      - name: Start it with only Windows on PATH
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $server = Join-Path $env:LOCALCODER_RUNTIME 'llama-server.exe'
+
+          # Strip the runner's toolchain from PATH. Anything the server needs must
+          # now come from its own directory or from Windows itself, which is the
+          # situation on the target workstation.
+          $clean = "$env:SystemRoot\System32;$env:SystemRoot;$env:SystemRoot\System32\Wbem"
+          "PATH for this step: $clean"
+
+          $psi = New-Object Diagnostics.ProcessStartInfo
+          $psi.FileName = $server
+          $psi.Arguments = '--version'
+          $psi.UseShellExecute = $false
+          $psi.RedirectStandardOutput = $true
+          $psi.RedirectStandardError = $true
+          $psi.EnvironmentVariables['PATH'] = $clean
+          $p = [Diagnostics.Process]::Start($psi)
+          $out = $p.StandardOutput.ReadToEnd()
+          $err = $p.StandardError.ReadToEnd()
+          $p.WaitForExit(60000) | Out-Null
+
+          "exit code: $($p.ExitCode)"
+          "--- stdout ---"; $out
+          "--- stderr ---"; $err
+
+          if ($p.ExitCode -ne 0) {
+            throw "llama-server --version exited $($p.ExitCode) with a Windows-only PATH. That is the failure a workstation sees."
+          }
+          Write-Host 'llama-server started and reported its version with no developer tooling on PATH.' -ForegroundColor Green
