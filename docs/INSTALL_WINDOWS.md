@@ -144,8 +144,14 @@ Expected:
 | Check | Expected |
 |---|---|
 | Length | `8200334` |
-| First line | begins with `PK` |
+| First line | **unreadable binary noise beginning with `PK`** |
 | SHA-256 | `01a2f57a355dd55eeaf54e276ffd2f0c0e60722ee0469db88f050122ba4e3cc6` |
+
+> Garbled output from `Get-Content` is the **success** case, not a fault. A VSIX
+> is a zip archive, so reading it as text necessarily prints binary noise, and
+> `PK` is the zip signature. The failure case is the opposite: *readable* text,
+> such as `<!DOCTYPE html>` or a proxy notice, means a block page was saved
+> under a `.vsix` name.
 
 Or as a single pass/fail:
 
