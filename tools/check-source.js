@@ -157,6 +157,24 @@ for (const key of runtimeKeys) {
 // dash inside a quoted string silently closes it early and the file dies with
 // "The string is missing the terminator". Requiring a BOM and ASCII-only bodies
 // removes both halves of that failure.
+// The bootstrap script installed 0.3.0 for a whole release after 0.3.1 shipped,
+// because its default version was a literal that the version bump did not touch.
+// It now resolves the newest release at run time and only falls back to this
+// constant, which must track the packaged version.
+const bootstrap = fs.readFileSync(path.join(root, 'scripts', 'Start-Workstation.ps1'), 'utf8');
+const fallbackMatch = /\$FallbackVersion\s*=\s*'([^']+)'/.exec(bootstrap);
+assert.ok(fallbackMatch, 'Start-Workstation.ps1 must declare $FallbackVersion');
+assert.equal(
+  fallbackMatch[1],
+  packageJson.version,
+  `Start-Workstation.ps1 falls back to ${fallbackMatch[1]} but the extension is ${packageJson.version}`
+);
+assert.match(
+  bootstrap,
+  /releases\/latest/,
+  'Start-Workstation.ps1 must resolve the newest release rather than pinning one'
+);
+
 const powershellFiles = walk(path.join(root, 'scripts')).filter((file) => file.toLowerCase().endsWith('.ps1'));
 assert.ok(powershellFiles.length > 0, 'No PowerShell scripts were found to check');
 for (const file of powershellFiles) {

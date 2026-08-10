@@ -24,7 +24,12 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Version = '0.3.0',
+    # Empty means "whatever the newest release is". A hardcoded default silently
+    # rots: this script kept installing 0.3.0 after 0.3.1 shipped, which
+    # reinstalled the exact build that could not start. The version is resolved
+    # at run time, and FallbackVersion below is only used when the API cannot be
+    # reached. check-source.js keeps that fallback equal to the packaged version.
+    [string]$Version = '',
     [string]$Repository = 'Arjun10g/restricted-local-coder',
     [string]$WorkDir = 'C:\coder',
     [string]$RuntimeKey = 'win32-x64',
@@ -85,6 +90,23 @@ function Test-JsonHasComments([string]$Text) {
 }
 function Write-Good([string]$Text) { Write-Host "    $Text" -ForegroundColor Green }
 function Write-Warn([string]$Text) { Write-Host "    $Text" -ForegroundColor Yellow }
+
+# Used only when the release API is unreachable. Kept equal to the packaged
+# version by tools/check-source.js.
+$FallbackVersion = '0.3.1'
+
+if (-not $Version) {
+    try {
+        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repository/releases/latest" -UseBasicParsing -TimeoutSec 20
+        $Version = ([string]$release.tag_name).TrimStart('v')
+        if (-not $Version) { throw 'the API returned no tag name' }
+        Write-Host "Resolved the latest release: v$Version"
+    } catch {
+        $Version = $FallbackVersion
+        Write-Host "Could not reach the release API ($($_.Exception.Message))."
+        Write-Host "Falling back to v$Version. Pass -Version to choose another."
+    }
+}
 
 $VsixName = "restricted-local-coder-$Version-$RuntimeKey.vsix"
 $BaseUrl = "https://github.com/$Repository/releases/download/v$Version"
@@ -165,10 +187,36 @@ if ($SkipInstall) {
     Write-Step 'Skipping installation as requested'
 } elseif ($CodeCommand) {
     Write-Step 'Installing the extension'
-    # Replacing in place; --force avoids a prompt when the same version exists.
+    # Remove any earlier build first. Leaving one behind is not fatal, but it
+    # makes diagnosing the next problem harder, and an older folder is what a
+    # still-running VS Code keeps using.
+    $extensionRoot = Join-Path $env:USERPROFILE '.vscode\extensions'
+    if (Test-Path -LiteralPath $extensionRoot) {
+        $existing = @(Get-ChildItem -LiteralPath $extensionRoot -Directory -Filter 'restricted-local.restricted-local-coder-*')
+        foreach ($item in $existing) {
+            if ($item.Name -notlike "*-$Version-*") {
+                Write-Warn "removing older install $($item.Name)"
+            }
+        }
+        if ($existing.Count -gt 0) {
+            & $CodeCommand --uninstall-extension restricted-local.restricted-local-coder 2>&1 | Out-Null
+        }
+    }
+
     & $CodeCommand --install-extension $VsixPath --force
     if ($LASTEXITCODE -ne 0) { throw "code --install-extension exited with $LASTEXITCODE" }
-    Write-Good 'installed'
+    Write-Good "installed v$Version"
+
+    # Verify what is actually on disk, rather than trusting the exit code.
+    $installed = @()
+    if (Test-Path -LiteralPath $extensionRoot) {
+        $installed = @(Get-ChildItem -LiteralPath $extensionRoot -Directory -Filter 'restricted-local.restricted-local-coder-*' |
+                       ForEach-Object { $_.Name })
+    }
+    foreach ($name in $installed) { Write-Good "on disk: $name" }
+    if ($installed.Count -gt 0 -and -not ($installed -like "*-$Version-*")) {
+        Write-Warn "v$Version is not on disk despite a successful install. Close VS Code entirely and re-run."
+    }
 }
 
 # ------------------------------------------------------------------- settings
@@ -236,6 +284,10 @@ if (-not $SkipSettings) {
 }
 
 # ----------------------------------------------------------------- next steps
+Write-Host ''
+Write-Host 'IMPORTANT: quit VS Code completely and reopen it.' -ForegroundColor Yellow
+Write-Host 'Installing over a running instance leaves the previous version loaded,'
+Write-Host 'so the runtime that starts is the old one.'
 Write-Host ''
 Write-Host 'Done. In VS Code, open a project folder and trust it, then run:' -ForegroundColor White
 Write-Host '  1. Local Coder: Run Preflight'
