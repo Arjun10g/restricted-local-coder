@@ -64,7 +64,9 @@ test('an installed redistributable in System32 also satisfies it', async (t) => 
 test('matching ignores case, as the Windows filesystem does', async (t) => {
   const directory = await temporaryDirectory();
   t.after(() => fsp.rm(directory, { recursive: true, force: true }));
-  await write(directory, 'MSVCP140.DLL', 'VCRuntime140.dll', 'vcruntime140_1.DLL');
+  // Derived from the exported list rather than hardcoded, so adding a required
+  // library cannot leave this test asserting a stale expectation.
+  await write(directory, ...WINDOWS_RUNTIME_LIBRARIES.map((name, index) => (index % 2 ? name.toUpperCase() : name)));
 
   const missing = await missingSystemLibraries(directory, 'win32', { SystemRoot: path.join(directory, 'absent') });
   assert.deepEqual(missing, []);
@@ -73,10 +75,18 @@ test('matching ignores case, as the Windows filesystem does', async (t) => {
 test('every absent library is reported, not just the first', async (t) => {
   const directory = await temporaryDirectory();
   t.after(() => fsp.rm(directory, { recursive: true, force: true }));
-  await write(directory, 'vcruntime140.dll');
+  const [provided, ...absent] = WINDOWS_RUNTIME_LIBRARIES;
+  await write(directory, provided);
 
   const missing = await missingSystemLibraries(directory, 'win32', { SystemRoot: path.join(directory, 'absent') });
-  assert.deepEqual(missing, ['msvcp140.dll', 'vcruntime140_1.dll']);
+  assert.deepEqual(missing, absent);
+});
+
+test('the OpenMP runtime is required, because every ggml-cpu backend imports it', () => {
+  // It ships inside the upstream archive, not with Windows. A packaging filter
+  // once dropped it, and llama-server then failed to load with nothing to go on
+  // beyond a failed --version.
+  assert.ok(WINDOWS_RUNTIME_LIBRARIES.includes('libomp140.x86_64.dll'));
 });
 
 test('a missing runtime directory is reported rather than throwing', async () => {

@@ -41,7 +41,17 @@ function acceleratedRuntimeKeys(key = getRuntimeKey()) {
 // The MSVC C/C++ runtime is not part of Windows itself, unlike the Universal
 // CRT. A locked-down workstation may not have it and cannot install it without
 // administrator rights, so the VSIX carries these beside llama-server.exe.
-const WINDOWS_RUNTIME_LIBRARIES = ['msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'];
+// libomp140 is the LLVM OpenMP runtime that every ggml-cpu backend imports. It
+// ships inside the upstream archive rather than with Windows, and an earlier
+// packaging filter dropped it — which made llama-server fail to load with no
+// message beyond a failed --version. Naming it here turns that into a preflight
+// row that says which file is missing.
+const WINDOWS_RUNTIME_LIBRARIES = [
+  'msvcp140.dll',
+  'vcruntime140.dll',
+  'vcruntime140_1.dll',
+  'libomp140.x86_64.dll',
+];
 
 function requiredSystemLibraries(platform = process.platform) {
   return platform === 'win32' ? [...WINDOWS_RUNTIME_LIBRARIES] : [];

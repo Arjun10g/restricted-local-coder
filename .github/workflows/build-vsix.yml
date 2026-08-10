@@ -91,6 +91,18 @@ jobs:
             }
           }
 
+      # Running the binary only proves the *build agent* could resolve its
+      # imports, and these runners carry LLVM and Visual Studio. This reads the
+      # PE import tables of what is about to be packaged and fails if anything
+      # would be missing on a clean workstation. libomp140.x86_64.dll was absent
+      # for exactly this reason and the running check did not notice.
+      - name: Verify every Windows dependency is bundled
+        if: matrix.runtime_key == 'win32-x64'
+        run: >-
+          python tools/fetch-runtime.py
+          --key win32-x64
+          --check-dependencies-only
+
       - name: Package platform-specific VSIX
         shell: bash
         run: |

@@ -23,6 +23,7 @@ import os
 import pathlib
 import shutil
 import stat
+import struct
 import subprocess
 import sys
 import tarfile
@@ -48,18 +49,129 @@ def is_runtime_library(name: str) -> bool:
 def wanted_library(name: str) -> bool:
     """Keep the libraries the server loads, not every tool in the archive.
 
-    The archives carry one `-impl` library per command line tool. Only the
-    server's is needed; the rest are a third of the payload. Everything else is
-    kept, because the server links more of the ggml backends than is obvious --
-    dropping ggml-rpc, for instance, makes it fail to load.
+    This is a deny-list on purpose. An earlier version kept only names starting
+    with ggml/llama/mtmd/cudart/cublas, which silently dropped
+    libomp140.x86_64.dll -- the LLVM OpenMP runtime that every ggml-cpu backend
+    imports. The result was a server that could not start at all on a machine
+    without Visual Studio, while CI passed because its runners have LLVM
+    installed.
+
+    Guessing which libraries matter from their names does not work. The archive
+    is upstream's own runtime payload, so everything in it is kept except the
+    per-tool `-impl` libraries, which are genuinely one-per-command-line-tool and
+    about a third of the download.
     """
     base = pathlib.PurePosixPath(name).name.lower()
     if not is_runtime_library(base):
         return False
     if "-impl" in base and "server-impl" not in base:
         return False
-    return any(base.startswith(prefix) or prefix in base
-               for prefix in ("ggml", "llama", "mtmd", "cudart", "cublas"))
+    return True
+
+
+# DLLs that are part of Windows itself, so a workstation always has them. Any
+# import outside this set has to be shipped beside the server.
+WINDOWS_SYSTEM_DLL_PREFIXES = (
+    "api-ms-win", "ext-ms-win", "kernel32", "kernelbase", "user32", "advapi32",
+    "shell32", "ole32", "oleaut32", "ws2_32", "crypt32", "bcrypt", "ncrypt",
+    "ntdll", "rpcrt4", "shlwapi", "psapi", "gdi32", "version", "winmm",
+    "iphlpapi", "secur32", "userenv", "dbghelp", "powrprof", "setupapi",
+    "cfgmgr32", "combase", "msvcrt.dll", "ucrtbase", "dxgi", "d3d12", "vulkan-1",
+    "opengl32", "winhttp", "wininet", "imm32", "comdlg32", "comctl32",
+)
+
+
+def pe_imports(path: pathlib.Path) -> list:
+    """Names of the DLLs a PE file imports, read straight from its import table.
+
+    Running the binary is not a sufficient check: it proves only that the
+    *build machine* could resolve every dependency, and CI runners carry
+    developer tooling that a locked-down workstation does not.
+    """
+    data = path.read_bytes()
+    if data[:2] != b"MZ":
+        return []
+    pe = struct.unpack_from("<I", data, 0x3C)[0]
+    if data[pe:pe + 4] != b"PE\0\0":
+        return []
+    section_count = struct.unpack_from("<H", data, pe + 6)[0]
+    optional_size = struct.unpack_from("<H", data, pe + 20)[0]
+    optional = pe + 24
+    magic = struct.unpack_from("<H", data, optional)[0]
+    directories = optional + (112 if magic == 0x20B else 96)
+    import_rva = struct.unpack_from("<I", data, directories + 8)[0]
+    if import_rva == 0:
+        return []
+
+    sections = []
+    table = pe + 24 + optional_size
+    for index in range(section_count):
+        entry = table + index * 40
+        virtual_size, virtual_address, raw_size, raw_pointer = struct.unpack_from("<IIII", data, entry + 8)
+        sections.append((virtual_address, max(virtual_size, raw_size), raw_pointer))
+
+    def to_offset(rva: int):
+        for virtual_address, size, raw_pointer in sections:
+            if virtual_address <= rva < virtual_address + size:
+                return raw_pointer + (rva - virtual_address)
+        return None
+
+    names = []
+    cursor = to_offset(import_rva)
+    if cursor is None:
+        return []
+    while True:
+        descriptor = struct.unpack_from("<IIIII", data, cursor)
+        if not any(descriptor):
+            break
+        name_offset = to_offset(descriptor[3])
+        if name_offset is not None:
+            end = data.index(b"\0", name_offset)
+            names.append(data[name_offset:end].decode("ascii", "replace"))
+        cursor += 20
+    return names
+
+
+# Copied in by the packaging workflow from the build agent's redistributable,
+# because the upstream archive does not carry them. During a fetch they are
+# legitimately absent; the strict pass after packaging is where they must exist.
+MSVC_REDIST_DLLS = ("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")
+
+
+def verify_windows_dependencies(destination: pathlib.Path, strict: bool = True) -> None:
+    """Fail if any shipped binary imports a DLL that will not be there."""
+    present = {item.name.lower() for item in destination.iterdir() if item.is_file()}
+    deferred = {}
+    missing = {}
+    for item in sorted(destination.iterdir()):
+        if item.suffix.lower() not in (".exe", ".dll"):
+            continue
+        for dependency in pe_imports(item):
+            lowered = dependency.lower()
+            if lowered in present or lowered.startswith(WINDOWS_SYSTEM_DLL_PREFIXES):
+                continue
+            if not strict and lowered in MSVC_REDIST_DLLS:
+                deferred.setdefault(lowered, []).append(item.name)
+                continue
+            missing.setdefault(lowered, []).append(item.name)
+
+    if deferred:
+        print("dependency check: still to be supplied by the packaging step: "
+              + ", ".join(sorted(deferred)))
+
+    if missing:
+        report = "\n".join(
+            f"  {name} - imported by {', '.join(users[:3])}{'...' if len(users) > 3 else ''}"
+            for name, users in sorted(missing.items())
+        )
+        raise SystemExit(
+            "These dependencies are neither bundled nor part of Windows, so the "
+            f"server cannot start on a clean machine:\n{report}"
+        )
+    if deferred:
+        print(f"dependency check: {len(present)} files checked; everything else resolves locally")
+    else:
+        print(f"dependency check: every import of {len(present)} files resolves locally")
 
 
 def sha256_file(path: pathlib.Path) -> str:
@@ -139,7 +251,24 @@ def main() -> int:
     parser.add_argument("--destination", default=None, help="defaults to extension/runtime/<key>")
     parser.add_argument("--cache-dir", default=None, help="reuse downloaded archives from here")
     parser.add_argument("--verify", action="store_true", help="run llama-server --version afterwards")
+    parser.add_argument(
+        "--check-dependencies-only",
+        action="store_true",
+        help="do not download; strictly check that an assembled runtime directory has every DLL it imports",
+    )
     args = parser.parse_args()
+
+    # Run after the packaging step has added the MSVC redistributable, so the
+    # directory being checked is exactly what ships.
+    if args.check_dependencies_only:
+        directory = pathlib.Path(args.destination) if args.destination else root / "extension" / "runtime" / args.key
+        if not directory.is_dir():
+            raise SystemExit(f"{directory} does not exist")
+        if not args.key.startswith("win32"):
+            print(f"{args.key}: import checking is Windows-only; nothing to do")
+            return 0
+        verify_windows_dependencies(directory, strict=True)
+        return 0
 
     lock = json.loads(pathlib.Path(args.lock).read_text(encoding="utf-8"))
     if lock.get("schemaVersion") != 2:
@@ -212,6 +341,12 @@ def main() -> int:
 
         total = sum(f.stat().st_size for f in destination.iterdir() if f.is_file())
         print(f"\n{args.key}: {copied} files, {total:,} bytes -> {destination}")
+
+        # Always runs, verify or not: it is a static check of what was just
+        # assembled, and it is the only one that reflects the target machine
+        # rather than the build machine.
+        if args.key.startswith("win32"):
+            verify_windows_dependencies(destination, strict=False)
 
         if args.verify:
             environment = os.environ.copy()

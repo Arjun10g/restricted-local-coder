@@ -145,7 +145,7 @@ Use this if the script fails, or if you prefer doing it yourself.
 
 ```powershell
 mkdir C:\coder -Force
-iwr https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.3.0/restricted-local-coder-0.3.0-win32-x64.vsix -OutFile C:\coder\coder.vsix
+iwr https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.3.1/restricted-local-coder-0.3.1-win32-x64.vsix -OutFile C:\coder\coder.vsix
 ```
 
 > Two things that bite here, both avoided above:
@@ -160,22 +160,22 @@ Behind a proxy that needs your credentials:
 ```powershell
 $Proxy = [System.Net.WebRequest]::GetSystemWebProxy()
 $Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
-Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.3.0/restricted-local-coder-0.3.0-win32-x64.vsix" -OutFile "C:\coder\coder.vsix" -Proxy $Proxy.GetProxy("https://github.com").AbsoluteUri -ProxyUseDefaultCredentials
+Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.3.1/restricted-local-coder-0.3.1-win32-x64.vsix" -OutFile "C:\coder\coder.vsix" -Proxy $Proxy.GetProxy("https://github.com").AbsoluteUri -ProxyUseDefaultCredentials
 ```
 
 Other routes, if both fail:
 
 ```powershell
 # Real curl, which ships with Windows 10+ as curl.exe
-curl.exe -L -o C:\coder\coder.vsix https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.3.0/restricted-local-coder-0.3.0-win32-x64.vsix
+curl.exe -L -o C:\coder\coder.vsix https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.3.1/restricted-local-coder-0.3.1-win32-x64.vsix
 
 # Background Intelligent Transfer Service, which often works when others do not
-Start-BitsTransfer -Source https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.3.0/restricted-local-coder-0.3.0-win32-x64.vsix -Destination C:\coder\coder.vsix
+Start-BitsTransfer -Source https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.3.1/restricted-local-coder-0.3.1-win32-x64.vsix -Destination C:\coder\coder.vsix
 ```
 
 Or simply open the release page in a browser and save the `win32-x64` asset to
 `C:\coder\coder.vsix`:
-<https://github.com/Arjun10g/restricted-local-coder/releases/tag/v0.3.0>
+<https://github.com/Arjun10g/restricted-local-coder/releases/tag/v0.3.1>
 
 ### 3.2 Verify it
 
@@ -183,11 +183,10 @@ Or simply open the release page in a browser and save the `win32-x64` asset to
 (Get-FileHash C:\coder\coder.vsix -Algorithm SHA256).Hash
 ```
 
-Compare what it prints, ignoring case, against:
+Compare what it prints, ignoring case, against the digest published beside the
+release asset:
 
-```
-39A6EE07EB7AEF5814EF48EFC008EF1DFDC212528E842628A2002F76EDC4728A
-```
+<https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.3.1/restricted-local-coder-0.3.1-win32-x64.vsix.sha256>
 
 They must match exactly. If they differ, delete the file and download it again
 over a different route — do not install it.
@@ -449,7 +448,8 @@ still needs your own tests and review.
 | `cannot find parameter name LO` | `curl` is an alias for `Invoke-WebRequest` | Use the commands in [3.1](#31-download-the-extension) |
 | Downloaded file is a few KB | Proxy block page saved as `.vsix` | Change route — see [3.1](#31-download-the-extension) |
 | Digest mismatch on the VSIX | Corrupt or intercepted download | Delete it and retry over a different route |
-| Preflight: Native runtime FAIL | Wrong-platform VSIX | Install the `win32-x64` asset |
+| Preflight: Native runtime FAIL | Wrong-platform VSIX, or a missing dependency | Install the `win32-x64` asset from **v0.3.1 or later**; v0.3.0 shipped without `libomp140.x86_64.dll` and could not start at all |
+| Preflight: System libraries FAIL naming `libomp140.x86_64.dll` | Runtime built before v0.3.1 | Install v0.3.1 or later |
 | Preflight: System libraries FAIL | MSVC runtime missing | This VSIX bundles it; reinstall and recheck the digest |
 | Preflight: Workspace trust FAIL | Folder not trusted | Trust it and reload |
 | Preflight: Model file WARN | Not downloaded yet | Expected before step 5 |
@@ -474,17 +474,17 @@ it cannot use. Treat Windows performance as CPU performance for now.
 
 ## 12. Reference values
 
-Correct for release `v0.3.0` and the weights currently published. If either is
+Correct for release `v0.3.1` and the weights currently published. If either is
 republished, take the values from the `.sha256` sidecar and the manifest rather
 than from here.
 
 | | |
 |---|---|
-| Release | `v0.3.0` |
+| Release | `v0.3.1` |
 | Extension id | `restricted-local.restricted-local-coder` |
-| VSIX | `restricted-local-coder-0.3.0-win32-x64.vsix` |
-| VSIX size | `17193497` bytes |
-| VSIX SHA-256 | `39a6ee07eb7aef5814ef48efc008ef1dfdc212528e842628a2002f76edc4728a` |
+| VSIX | `restricted-local-coder-0.3.1-win32-x64.vsix` |
+| VSIX size | see the `.sha256` sidecar on the release |
+| VSIX SHA-256 | see the `.sha256` sidecar on the release |
 | Model | `muse-glimmer-30B-kquant-17gb.gguf` |
 | Model size | `16756681056` bytes (15.61 GiB) |
 | Model SHA-256 | `7e9b74b7c8875e9e265695df9613bf6290f2392e479ce740495a129019c488d8` |

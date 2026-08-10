@@ -118,7 +118,7 @@ The source repository intentionally contains neither model weights nor compiled 
 
 ### 2. Produce the platform VSIX
 
-Run **Actions → Build platform VSIX → Run workflow**, or push a release tag such as `v0.3.0`. The workflow:
+Run **Actions → Build platform VSIX → Run workflow**, or push a release tag such as `v0.3.1`. The workflow:
 
 1. validates the source and tests;
 2. checks out the full commit in `vendor/llama.cpp.lock.json`;
@@ -133,7 +133,7 @@ For the intended laptop, download the `restricted-local-coder-win32-x64` workflo
 Use **Extensions → … → Install from VSIX…**, or:
 
 ```powershell
-code --install-extension .\restricted-local-coder-0.3.0-win32-x64.vsix --force
+code --install-extension .\restricted-local-coder-0.3.1-win32-x64.vsix --force
 ```
 
 ### 4. Deliver the model
