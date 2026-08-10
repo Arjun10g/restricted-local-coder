@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$VsixPath,
     [Parameter(Mandatory = $true)][string]$ModelPath,

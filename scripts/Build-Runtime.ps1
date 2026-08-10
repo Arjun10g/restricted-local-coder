@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Deprecated. The runtime is no longer compiled here.
 

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Split an approved GGUF and publish the parts as GitHub release assets.
 

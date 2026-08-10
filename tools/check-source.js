@@ -151,6 +151,29 @@ for (const key of runtimeKeys) {
   }
 }
 
+// Windows PowerShell 5.1 reads a .ps1 without a byte-order mark as Windows-1252,
+// not UTF-8. A UTF-8 em dash then decodes as three CP1252 characters ending in
+// U+201D, and PowerShell accepts curly quotes as string delimiters — so an em
+// dash inside a quoted string silently closes it early and the file dies with
+// "The string is missing the terminator". Requiring a BOM and ASCII-only bodies
+// removes both halves of that failure.
+const powershellFiles = walk(path.join(root, 'scripts')).filter((file) => file.toLowerCase().endsWith('.ps1'));
+assert.ok(powershellFiles.length > 0, 'No PowerShell scripts were found to check');
+for (const file of powershellFiles) {
+  const relative = path.relative(root, file);
+  const bytes = fs.readFileSync(file);
+  assert.ok(
+    bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf,
+    `${relative} needs a UTF-8 BOM, or Windows PowerShell 5.1 will read it as Windows-1252`
+  );
+  const body = bytes.subarray(3);
+  const offending = body.findIndex((byte) => byte > 0x7f);
+  if (offending !== -1) {
+    const line = body.subarray(0, offending).toString('utf8').split('\n').length;
+    assert.fail(`${relative}:${line} contains a non-ASCII character; use an ASCII equivalent`);
+  }
+}
+
 const benchmarkTasks = JSON.parse(fs.readFileSync(path.join(root, 'bench', 'coding-smoke.json'), 'utf8'));
 assert.ok(Array.isArray(benchmarkTasks) && benchmarkTasks.length >= 5, 'Coding benchmark needs at least five tasks');
 for (const task of benchmarkTasks) {

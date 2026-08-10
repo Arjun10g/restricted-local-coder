@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$ProfileId = 'qwen3-coder-30b-a3b-iq2m',
     [string]$ModelPath = '',
@@ -46,8 +46,8 @@ catch {
 
 if (Test-Path -LiteralPath $RuntimePath -PathType Leaf) {
     try {
-        $Version = (& $RuntimePath --version 2>&1 | Select-Object -First 2) -join ' · '
-        if ($LASTEXITCODE -eq 0) { Result PASS 'Runtime' "$RuntimePath · $Version" }
+        $Version = (& $RuntimePath --version 2>&1 | Select-Object -First 2) -join ' - '
+        if ($LASTEXITCODE -eq 0) { Result PASS 'Runtime' "$RuntimePath - $Version" }
         else { Result FAIL 'Runtime' "--version exited $LASTEXITCODE" }
     }
     catch { Result FAIL 'Runtime' $_.Exception.Message }

@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet('win32-x64', 'linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64')]
     [string]$Target = 'win32-x64',

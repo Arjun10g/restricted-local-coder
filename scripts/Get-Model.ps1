@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$ProfileId = 'qwen3-coder-30b-a3b-iq2m',
     [string]$DestinationDirectory = '',

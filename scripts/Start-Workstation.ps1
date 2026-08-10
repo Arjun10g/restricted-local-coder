@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     One-shot workstation setup: download, verify, install, and configure.
 
@@ -42,7 +42,7 @@ $ProgressPreference = 'SilentlyContinue'   # a visible progress bar makes Invoke
 function Write-Step([string]$Text) { Write-Host "`n==> $Text" -ForegroundColor Cyan }
 
 <#
-    True when the JSON text uses VS Code's JSONC extensions — comments or a
+    True when the JSON text uses VS Code's JSONC extensions - comments or a
     trailing comma.
 
     This cannot be left to ConvertFrom-Json. PowerShell 7 accepts comments and
@@ -90,7 +90,7 @@ $VsixName = "restricted-local-coder-$Version-$RuntimeKey.vsix"
 $BaseUrl = "https://github.com/$Repository/releases/download/v$Version"
 $VsixPath = Join-Path $WorkDir $VsixName
 
-Write-Host "Restricted Local Coder — workstation setup" -ForegroundColor White
+Write-Host "Restricted Local Coder - workstation setup" -ForegroundColor White
 Write-Host "  release   : v$Version"
 Write-Host "  package   : $VsixName"
 Write-Host "  workdir   : $WorkDir"
@@ -137,7 +137,7 @@ $Expected = $null
 try {
     # GitHub serves .sha256 as application/octet-stream, so PowerShell 7 hands
     # back a byte array rather than a string. Splitting that on whitespace
-    # silently yields the first byte value — 51, the character code of "3" —
+    # silently yields the first byte value - 51, the character code of "3" -
     # which then fails the comparison against a perfectly good download.
     $SidecarContent = (Invoke-WebRequest -Uri "$BaseUrl/$VsixName.sha256" -UseBasicParsing).Content
     if ($SidecarContent -is [byte[]]) {

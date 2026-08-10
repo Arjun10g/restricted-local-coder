@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$RuntimePath,
     [Parameter(Mandatory = $true)][string]$ModelPath,
@@ -140,7 +140,7 @@ try {
             forbiddenChecks = $Forbidden.details
             response = $Text
         })
-        Write-Host ("[{0}] {1} · {2} ms" -f $(if ($Passed) { 'PASS' } else { 'FAIL' }), $Task.id, $Stopwatch.ElapsedMilliseconds)
+        Write-Host ("[{0}] {1} - {2} ms" -f $(if ($Passed) { 'PASS' } else { 'FAIL' }), $Task.id, $Stopwatch.ElapsedMilliseconds)
     }
     Write-Progress -Activity 'Local coding benchmark' -Completed
 }
