@@ -98,7 +98,7 @@ The source repository intentionally contains neither model weights nor compiled 
 
 ### 2. Produce the platform VSIX
 
-Run **Actions → Build platform VSIX → Run workflow**, or push a release tag such as `v0.1.0`. The workflow:
+Run **Actions → Build platform VSIX → Run workflow**, or push a release tag such as `v0.2.0`. The workflow:
 
 1. validates the source and tests;
 2. checks out the full commit in `vendor/llama.cpp.lock.json`;
@@ -113,7 +113,7 @@ For the intended laptop, download the `restricted-local-coder-win32-x64` workflo
 Use **Extensions → … → Install from VSIX…**, or:
 
 ```powershell
-code --install-extension .\restricted-local-coder-0.1.0-win32-x64.vsix --force
+code --install-extension .\restricted-local-coder-0.2.0-win32-x64.vsix --force
 ```
 
 ### 4. Deliver the model
@@ -157,16 +157,28 @@ After a real runtime and model are available:
 ```powershell
 .\scripts\Invoke-SmokeTest.ps1 `
   -RuntimePath .\extension\runtime\win32-x64\llama-server.exe `
-  -ModelPath "$env:LOCALAPPDATA\RestrictedLocalCoder\models\Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf"
+  -ModelPath "$env:LOCALAPPDATA\RestrictedLocalCoder\models\muse-glimmer-30B-kquant-17gb.gguf"
 ```
 
-Compare quantizations with:
+The smoke test also reports the model's trained context (`n_ctx_train`) and how
+many layers were actually offloaded to the GPU. The manifest keeps `contextSize`
+below the trained value deliberately; raising it past that point degrades output
+quality silently rather than failing.
+
+Compare quantizations, and measure what acceleration is worth on your hardware,
+with:
 
 ```powershell
 .\scripts\Invoke-ModelBenchmark.ps1 `
   -RuntimePath .\extension\runtime\win32-x64\llama-server.exe `
-  -ModelPath <approved-gguf>
+  -ModelPath <approved-gguf> `
+  -GpuLayers auto `
+  -DraftPath "$env:LOCALAPPDATA\RestrictedLocalCoder\models\dflash-kquant.gguf"
 ```
+
+Each run records its `gpuLayers` and draft model in `benchmark-results.json`, so
+two result sets stay comparable. Run it with `-GpuLayers off` and without
+`-DraftPath` to get the baseline.
 
 The included benchmark performs static checks and never executes generated code. Production approval still requires real repository tests, security review, and latency/memory measurement.
 

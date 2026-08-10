@@ -77,7 +77,7 @@ npm run validate
 Expected output ends with:
 
 ```
-Manifest OK: 4 approved profiles; default=qwen3-coder-30b-a3b-iq2m
+Manifest OK: 6 approved profiles; default=muse-glimmer-30b-kquant
 Source policy OK: N JavaScript files checked
 # pass N
 # fail 0
@@ -130,7 +130,7 @@ $ProgressPreference = 'SilentlyContinue'
 
 # Replace the owner and tag with the real ones from the releases page.
 $base = "https://github.com/<owner>/restricted-local-coder/releases/download/<tag>"
-$name = "restricted-local-coder-0.1.0-win32-x64.vsix"
+$name = "restricted-local-coder-0.2.0-win32-x64.vsix"
 
 Invoke-WebRequest -Uri "$base/$name"        -OutFile $name
 Invoke-WebRequest -Uri "$base/$name.sha256" -OutFile "$name.sha256"
@@ -149,8 +149,8 @@ curl.exe -L -O "$base/$name"
 
 ```bash
 base=https://github.com/<owner>/restricted-local-coder/releases/download/<tag>
-curl -LO "$base/restricted-local-coder-0.1.0-linux-x64.vsix"
-curl -LO "$base/restricted-local-coder-0.1.0-linux-x64.vsix.sha256"
+curl -LO "$base/restricted-local-coder-0.2.0-linux-x64.vsix"
+curl -LO "$base/restricted-local-coder-0.2.0-linux-x64.vsix.sha256"
 ```
 
 **Confirm you downloaded a VSIX and not an error page.** A proxy that blocks the
@@ -227,7 +227,7 @@ Package:
 ```bash
 cd extension
 npx --yes @vscode/vsce@3.9.2 package --target win32-x64 \
-  --out ../artifacts/restricted-local-coder-0.1.0-win32-x64.vsix --no-dependencies
+  --out ../artifacts/restricted-local-coder-0.2.0-win32-x64.vsix --no-dependencies
 cd ..
 ```
 
@@ -237,13 +237,13 @@ Never install a VSIX whose digest you have not checked. The two values printed
 here must be identical.
 
 ```powershell
-(Get-FileHash .\restricted-local-coder-0.1.0-win32-x64.vsix -Algorithm SHA256).Hash.ToLower()
-Get-Content .\restricted-local-coder-0.1.0-win32-x64.vsix.sha256
+(Get-FileHash .\restricted-local-coder-0.2.0-win32-x64.vsix -Algorithm SHA256).Hash.ToLower()
+Get-Content .\restricted-local-coder-0.2.0-win32-x64.vsix.sha256
 ```
 
 ```bash
-shasum -a 256 restricted-local-coder-0.1.0-linux-x64.vsix
-cat restricted-local-coder-0.1.0-linux-x64.vsix.sha256
+shasum -a 256 restricted-local-coder-0.2.0-linux-x64.vsix
+cat restricted-local-coder-0.2.0-linux-x64.vsix.sha256
 ```
 
 ---
@@ -251,7 +251,7 @@ cat restricted-local-coder-0.1.0-linux-x64.vsix.sha256
 ## Step 5 — Install
 
 ```bash
-code --install-extension ./vsix/restricted-local-coder-0.1.0-win32-x64.vsix
+code --install-extension ./vsix/restricted-local-coder-0.2.0-win32-x64.vsix
 code --list-extensions
 ```
 
@@ -266,16 +266,20 @@ refuses to start in an untrusted workspace by design.
 
 ```json
 {
-  "localCoder.modelProfile": "qwen3-coder-30b-a3b-iq2m",
+  "localCoder.modelProfile": "muse-glimmer-30b-kquant",
   "localCoder.runtime.contextSize": 8192,
   "localCoder.runtime.promptCacheMiB": 512,
   "localCoder.runtime.autoStart": false,
+  "localCoder.runtime.gpuLayers": "auto",
+  "localCoder.runtime.enableDraftModel": true,
   "localCoder.inlineCompletions.enabled": false
 }
 ```
 
-Begin at 8K context and with inline completions off. Raise either only after
-measuring memory under real use.
+Begin at 8K context and with inline completions off. Raise the context only
+after measuring memory under real use, and never above the `n_ctx_train` value
+the smoke test reports. The default profile has no fill-in-the-middle tokens, so
+inline completion is unavailable for it whatever the setting says.
 
 ---
 

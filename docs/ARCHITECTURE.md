@@ -48,7 +48,7 @@ flowchart LR
 3. Active sensitive files and common secret locations are rejected, including `.env*`, private keys, credential files, `.vscode`, `.ssh`, `.aws`, `.azure`, `.gnupg`, and `.kube`.
 4. Reserved wrapper tags are neutralized, code fences grow beyond any backtick run in the source, and the resulting blocks are explicitly labeled as untrusted data.
 5. Chat uses the OpenAI-compatible `/v1/chat/completions` route with streaming.
-6. Qwen Coder inline completion uses llama.cpp's `/completion` route and fill-in-the-middle tokens.
+6. Inline completion uses llama.cpp's `/completion` route and fill-in-the-middle tokens, and is available only for profiles whose manifest entry sets `fim: true`. The control tokens default to Qwen's spelling and may be overridden per profile with `fimTemplate`. A profile declaring `fim: false` — including the current default — refuses the request rather than sending tokens the model was never trained on.
 7. Responses travel only over a bearer-authenticated loopback connection.
 
 ## Runtime process contract
@@ -74,6 +74,10 @@ child environment: LLAMA_API_KEY=<random SecretStorage value>
 --cache-type-v q8_0
 --load-mode mmap
 --flash-attn auto
+--n-gpu-layers <-1 for auto, a pinned count, or the flag omitted when "off">
+--model-draft <approved drafter, only when the file is installed>
+--spec-draft-n-max <1-64; 16 by default>
+--n-gpu-layers-draft -1
 --jinja
 --no-webui
 --no-agent
@@ -83,11 +87,17 @@ child environment: LLAMA_API_KEY=<random SecretStorage value>
 --no-slots
 ```
 
+The three acceleration flags are all conditional and all degrade rather than fail:
+
+- `--n-gpu-layers` is omitted entirely when `localCoder.runtime.gpuLayers` is `off`. A value of `-1` asks llama.cpp to place as many layers as the device holds, which is a no-op on a machine with no GPU. A value that is neither `auto`, `off`, nor a number falls back to `auto` and is logged, because reading a typo as "zero layers" is indistinguishable from a machine that lost its GPU.
+- `--model-draft` appears only when the selected profile declares a `draftModel`, the setting is on, **and** the file is present on disk. A missing drafter logs one line and starts normally.
+- Flag naming is pinned to the vendored llama.cpp tag. Upstream removed `--draft-max` and `--draft-min` in favour of `--spec-draft-n-max` and `--spec-draft-n-min`; the older spellings are rejected by the server, so `tools/check-source.js` asserts the current names appear in the runtime source.
+
 The API key is not placed on the process command line. Inherited `LLAMA_*`, `GGML_*`, Hugging Face, and dynamic-library injection variables are stripped before the child starts. User-supplied extra arguments cannot override model, network, authentication, logging, agent/tool, context, parallelism, cache, or endpoint controls.
 
 ## Persistence
 
-- Model files: configurable user-level application-data directory, outside the extension installation.
+- Model files: configurable user-level application-data directory, outside the extension installation. An optional draft model lives in the same directory and is verified against its own approved digest.
 - Validation record: VS Code global state; it stores only file metadata and the approved digest.
 - API key: VS Code SecretStorage.
 - Selected profile and accepted license: VS Code global state.

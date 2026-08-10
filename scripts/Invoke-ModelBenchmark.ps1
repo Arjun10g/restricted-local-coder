@@ -8,7 +8,11 @@ param(
     [int]$StartupTimeoutSeconds = 600,
     [int]$ContextSize = 4096,
     [int]$Threads = 0,
-    [int]$MaxTokens = 512
+    [int]$MaxTokens = 512,
+    # Benchmarking with different acceleration settings is the point of these
+    # two, since speculative decoding changes throughput but not output.
+    [string]$GpuLayers = 'auto',
+    [string]$DraftPath = ''
 )
 
 Set-StrictMode -Version Latest
@@ -54,7 +58,22 @@ $Arguments = @(
     '--batch-size', '256', '--ubatch-size', '64', '--parallel', '1',
     '--cache-ram', '0', '--no-cache-idle-slots',
     '--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0',
-    '--load-mode', 'mmap', '--flash-attn', 'auto', '--jinja',
+    '--load-mode', 'mmap', '--flash-attn', 'auto'
+)
+
+if ($GpuLayers -ne 'off') {
+    $Layers = if ($GpuLayers -eq 'auto') { '-1' } else { [string]([int]$GpuLayers) }
+    $Arguments += @('--n-gpu-layers', $Layers)
+}
+
+if ($DraftPath) {
+    $DraftPath = (Resolve-Path -LiteralPath $DraftPath).Path
+    $Arguments += @('--model-draft', $DraftPath, '--spec-draft-n-max', '16')
+    if ($GpuLayers -ne 'off') { $Arguments += @('--n-gpu-layers-draft', '-1') }
+}
+
+$Arguments += @(
+    '--jinja',
     '--no-webui', '--no-agent', '--offline', '--cors-origins', 'localhost',
     '--no-cors-credentials', '--no-slots', '--log-colors', 'off', '--log-timestamps'
 )
@@ -146,6 +165,10 @@ $Summary = [ordered]@{
     contextSize = $ContextSize
     threads = $Threads
     maxTokens = $MaxTokens
+    # Latency is only comparable between runs that used the same acceleration,
+    # so record it rather than leaving two result sets indistinguishable.
+    gpuLayers = $GpuLayers
+    draftModel = if ($DraftPath) { $DraftPath } else { $null }
     passed = $PassedCount
     total = $Results.Count
     passRate = if ($Results.Count -gt 0) { [Math]::Round($PassedCount / $Results.Count, 4) } else { 0 }

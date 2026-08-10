@@ -1,7 +1,7 @@
 # Staging the model through Cloud Storage — copy and paste
 
-Publishing 10.9 GB of weights without any large transfer touching a laptop, and
-without rebuilding the extension.
+Publishing ~17 GiB of weights and an optional draft model without any large
+transfer touching a laptop, and without rebuilding the extension.
 
 Every command is literal. Values used throughout:
 
@@ -11,8 +11,10 @@ Every command is literal. Values used throughout:
 | Zone | `us-east1-d` |
 | Bucket | `restricted-local-coder-dazzling-howl-491904` |
 | VM name | `local-coder-staging` |
-| Model file | `Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf` |
-| Approved SHA-256 | `0a860d0a6876b4c2f8b903aef62eeb020f34c83ae64a1d8e65687c9af0c1d1f5` |
+| Model file | `muse-glimmer-30B-kquant-17gb.gguf` |
+| Approved SHA-256 | `7e9b74b7c8875e9e265695df9613bf6290f2392e479ce740495a129019c488d8` |
+| Draft model | `dflash-kquant.gguf` |
+| Draft SHA-256 | `27d9a805fa29b943cfb6ad4843367cd4eaaaf06bd452d8cc3e00a2cd18a677bc` |
 
 An object store has no per-file size limit, so the weights are published as one
 file and the extension's existing mirror path serves them. **No manifest change
@@ -76,10 +78,23 @@ cd restricted-local-coder
 ./scripts/stage-model-gcs.sh --bucket restricted-local-coder-dazzling-howl-491904
 ```
 
+Then stage the optional draft model, which speculative decoding needs:
+
+```bash
+./scripts/stage-model-gcs.sh --bucket restricted-local-coder-dazzling-howl-491904 --draft
+```
+
 The script refuses to publish anything whose digest is not already approved. It
 downloads resumably, verifies the SHA-256 **before** uploading, uploads, then
 confirms the published object's length matches the verified local file. Expect
-it to take a while; the download and upload are each about 11 GB.
+it to take a while; the weights are about 15.6 GiB each way, the drafter 1.5 GiB.
+
+When first seeding a new mirror, the manifest already points at the bucket the
+file is about to land in, so pass the true origin explicitly:
+
+```bash
+./scripts/stage-model-gcs.sh --bucket <bucket> --source-url "https://<origin>/<file>.gguf"
+```
 
 If the SSH session drops mid-transfer, reconnect and rerun the same command —
 the download resumes rather than starting over.
@@ -119,12 +134,14 @@ and add:
 
 ```json
 {
-  "localCoder.modelProfile": "qwen3-coder-30b-a3b-iq2m",
+  "localCoder.modelProfile": "muse-glimmer-30b-kquant",
   "localCoder.modelMirrorBaseUrl": "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/",
   "localCoder.network.allowPublicModelDownload": false,
   "localCoder.runtime.contextSize": 8192,
   "localCoder.runtime.promptCacheMiB": 512,
   "localCoder.runtime.autoStart": false,
+  "localCoder.runtime.gpuLayers": "auto",
+  "localCoder.runtime.enableDraftModel": true,
   "localCoder.inlineCompletions.enabled": false
 }
 ```
@@ -134,13 +151,14 @@ this base. Setting `allowPublicModelDownload` to `false` stops it falling back
 to ModelScope, which the workstation cannot reach anyway.
 
 Optional sanity check that the object is visible from the workstation before
-starting an 11 GB download:
+starting a 17 GiB download:
 
 ```powershell
-(Invoke-WebRequest -Uri "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf" -Method Head -UseBasicParsing).Headers["Content-Length"]
+(Invoke-WebRequest -Uri "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/muse-glimmer-30B-kquant-17gb.gguf" -Method Head -UseBasicParsing).Headers["Content-Length"]
+(Invoke-WebRequest -Uri "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/dflash-kquant.gguf" -Method Head -UseBasicParsing).Headers["Content-Length"]
 ```
 
-Expect roughly `11703785882`.
+Expect exactly `16756681056` and `1631205312`.
 
 ---
 

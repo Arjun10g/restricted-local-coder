@@ -30,8 +30,8 @@ On a connected, governed staging machine:
 
 ```powershell
 .\scripts\New-OfflineBundle.ps1 `
-  -VsixPath .\restricted-local-coder-0.1.0-win32-x64.vsix `
-  -ModelPath .\Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf `
+  -VsixPath .\restricted-local-coder-0.2.0-win32-x64.vsix `
+  -ModelPath .\muse-glimmer-30B-kquant-17gb.gguf `
   -OutputDirectory .\offline-local-coder `
   -CreateZip
 ```
@@ -58,7 +58,7 @@ On the governed staging machine that can reach the model source:
 
 ```powershell
 .\scripts\Publish-ModelParts.ps1 `
-  -ModelPath .\Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf `
+  -ModelPath .\muse-glimmer-30B-kquant-17gb.gguf `
   -Repository <owner>/<repo> `
   -Tag model-iq2m-v1
 ```
@@ -71,7 +71,7 @@ the release limit, uploads them to an immutable tag, and prints a `parts` block:
 "parts": {
   "baseUrls": ["https://github.com/<owner>/<repo>/releases/download/model-iq2m-v1/"],
   "files": [
-    { "name": "Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf.part-001", "bytes": 1900000000, "sha256": "…" }
+    { "name": "muse-glimmer-30B-kquant-17gb.gguf.part-001", "bytes": 1900000000, "sha256": "…" }
   ]
 }
 ```

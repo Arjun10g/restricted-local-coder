@@ -6,33 +6,41 @@ to substitute.
 ## What this page pins
 
 Digests below are exact and **version-locked**. They are correct for release
-`v0.1.0` and the weights currently published. When either is republished the
+`v0.2.0` and the weights currently published. When either is republished the
 digests change, so take them from the `.sha256` sidecar and the manifest rather
 than from memory.
 
 | | |
 |---|---|
-| Release | `v0.1.0` |
+| Release | `v0.2.0` |
 | Extension id | `restricted-local.restricted-local-coder` |
-| VSIX | `restricted-local-coder-0.1.0-win32-x64.vsix` |
-| VSIX size | `8200308` bytes |
-| VSIX SHA-256 | `781db8b9f55ab9da7a4deb34eebf8f1761901a75748a5b488315524846c36a24` |
-| Model | `Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf` |
-| Model size | `10848017760` bytes (10.1 GiB) |
-| Model SHA-256 | `0823c953beeda2db652da5839b94fbe08a75725d67bfcd093ca39ba8c1b47d41` |
+| VSIX | `restricted-local-coder-0.2.0-win32-x64.vsix` |
+| VSIX size | see the `.sha256` sidecar on the release |
+| VSIX SHA-256 | see the `.sha256` sidecar on the release |
+| Model | `muse-glimmer-30B-kquant-17gb.gguf` |
+| Model size | `16756681056` bytes (15.61 GiB) |
+| Model SHA-256 | `7e9b74b7c8875e9e265695df9613bf6290f2392e479ce740495a129019c488d8` |
+| Draft model | `dflash-kquant.gguf` (optional) |
+| Draft size | `1631205312` bytes (1.52 GiB) |
+| Draft SHA-256 | `27d9a805fa29b943cfb6ad4843367cd4eaaaf06bd452d8cc3e00a2cd18a677bc` |
 | Model source | `https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/` |
 
-Roughly 10 GB is transferred in step 6, and about 15 GB of free disk is wanted.
+About 17.1 GiB is transferred in step 6, and roughly 22 GiB of free disk is
+wanted. The Qwen profiles remain in the manifest but their weights are **not**
+staged in this bucket; selecting one without staging it first will fail to
+download.
 
 ---
 
 ## Step 1 — Remove any earlier install
 
-Skip nothing here even if you think the machine is clean. The version number has
-not changed between builds, so VS Code can keep old files, and any build made
-before 2026-08-10 carries an approved digest that **rejects the published
-weights** — which surfaces as a hash mismatch at the end of a 10 GB download,
-looking exactly like a corrupted transfer.
+Skip nothing here even if you think the machine is clean.
+
+**If you installed `v0.1.0`, you must replace it.** That build shipped before the
+model pivot: it knows only the Qwen profiles, whose weights are no longer staged
+in the bucket, so it cannot download anything. It also predates GPU offload,
+speculative decoding, and the draft-model download. Uninstalling first also
+avoids VS Code retaining files from a same-versioned build.
 
 ```powershell
 code --uninstall-extension restricted-local.restricted-local-coder
@@ -47,7 +55,7 @@ stays locked.
 
 ```powershell
 New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
-Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.1.0/restricted-local-coder-0.1.0-win32-x64.vsix" -OutFile "C:\coder\coder.vsix"
+Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.2.0/restricted-local-coder-0.2.0-win32-x64.vsix" -OutFile "C:\coder\coder.vsix"
 ```
 
 `curl` in PowerShell is an alias for `Invoke-WebRequest` and rejects curl flags,
@@ -61,9 +69,21 @@ release CDN.
 
 ## Step 3 — Verify before installing
 
+Every release publishes a `.sha256` sidecar beside each VSIX, so the expected
+digest is fetched rather than typed. This stays correct across releases:
+
 ```powershell
-if ((Get-FileHash "C:\coder\coder.vsix" -Algorithm SHA256).Hash.ToLower() -eq "781db8b9f55ab9da7a4deb34eebf8f1761901a75748a5b488315524846c36a24") { "OK - safe to install" } else { "MISMATCH - do not install" }
+$Base = "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.2.0"
+$Expected = ((Invoke-WebRequest -Uri "$Base/restricted-local-coder-0.2.0-win32-x64.vsix.sha256" -UseBasicParsing).Content -split '\s+')[0]
+$Actual = (Get-FileHash "C:\coder\coder.vsix" -Algorithm SHA256).Hash.ToLower()
+"expected $Expected"
+"actual   $Actual"
+if ($Actual -eq $Expected) { "OK - safe to install" } else { "MISMATCH - do not install" }
 ```
+
+If this machine cannot reach the release CDN to fetch the sidecar, read the
+digest from the release page in a browser and compare it by eye against
+`$Actual`.
 
 A file of a few kilobytes is a proxy block page saved under a `.vsix` name.
 Retrying the same route will fetch the same page; change routes instead.
@@ -96,12 +116,14 @@ refuses to start in an untrusted workspace by design. Then `Ctrl+Shift+P` →
 
 ```json
 {
-  "localCoder.modelProfile": "qwen3-coder-30b-a3b-iq2m",
+  "localCoder.modelProfile": "muse-glimmer-30b-kquant",
   "localCoder.modelMirrorBaseUrl": "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/",
   "localCoder.network.allowPublicModelDownload": false,
   "localCoder.runtime.contextSize": 8192,
   "localCoder.runtime.promptCacheMiB": 512,
   "localCoder.runtime.autoStart": false,
+  "localCoder.runtime.gpuLayers": "auto",
+  "localCoder.runtime.enableDraftModel": true,
   "localCoder.inlineCompletions.enabled": false
 }
 ```
@@ -110,14 +132,25 @@ The trailing slash on the mirror URL matters — the extension appends the model
 file name to it. Setting `allowPublicModelDownload` to `false` stops it falling
 back to ModelScope, which this machine cannot reach.
 
-Confirm the weights are visible before starting a 10 GB transfer:
+`gpuLayers` on `auto` is safe on a machine with no GPU: llama.cpp simply places
+nothing and runs on the CPU. Set it to `"off"` only if a partial offload turns
+out to be slower than pure CPU, which does happen on small VRAM.
+
+Leave `inlineCompletions.enabled` at `false`. Muse Glimmer has no
+fill-in-the-middle tokens, so the extension refuses inline requests for this
+profile regardless — turning it on has no effect. Inline completion needs one of
+the Qwen profiles, whose weights are not currently staged.
+
+Confirm the weights are visible before starting a 16 GB transfer:
 
 ```powershell
-(Invoke-WebRequest -Uri "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf" -Method Head -UseBasicParsing).Headers["Content-Length"]
+(Invoke-WebRequest -Uri "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/muse-glimmer-30B-kquant-17gb.gguf" -Method Head -UseBasicParsing).Headers["Content-Length"]
+(Invoke-WebRequest -Uri "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/dflash-kquant.gguf" -Method Head -UseBasicParsing).Headers["Content-Length"]
 ```
 
-Expect exactly `10848017760`. Anything else — a timeout, a redirect to a login
-page — means the mirror is unreachable from here, and no setting will fix that.
+Expect exactly `16756681056` and `1631205312`. Anything else — a timeout, a
+redirect to a login page — means the mirror is unreachable from here, and no
+setting will fix that.
 
 ---
 
@@ -125,17 +158,23 @@ page — means the mirror is unreachable from here, and no setting will fix that
 
 `Ctrl+Shift+P` → **Local Coder: Run Preflight**
 
-Every row should read PASS except **Model file**, which correctly warns the
-weights are absent. Resolve any FAIL before continuing; a WARN there is
-expected.
+Every row should read PASS except **Model file** and **Draft model**, which
+correctly warn that nothing is downloaded yet. **GPU offload** warns on a machine
+with no NVIDIA device; that is expected and not a blocker. Resolve any FAIL
+before continuing.
 
 `Ctrl+Shift+P` → **Local Coder: Download or Repair Model**
 
-About 10 GB, resumable, so cancelling and rerunning is safe. On completion the
-extension computes the SHA-256 itself and refuses the file unless it matches the
+About 15.6 GiB for the weights, then a further 1.5 GiB for the optional draft
+model. Both are resumable, so cancelling and rerunning is safe. On completion the
+extension computes each SHA-256 itself and refuses a file unless it matches the
 approved digest. That check has no setting and cannot be turned off.
 
-Weights are stored per-user at `%LOCALAPPDATA%\RestrictedLocalCoder\models\`.
+If the drafter fails but the weights succeed, you get a warning and a working
+install — speculative decoding is a speed optimisation, not a requirement, and
+the runtime starts without it.
+
+Both files are stored per-user at `%LOCALAPPDATA%\RestrictedLocalCoder\models\`.
 
 ---
 
@@ -143,8 +182,9 @@ Weights are stored per-user at `%LOCALAPPDATA%\RestrictedLocalCoder\models\`.
 
 `Ctrl+Shift+P`, in order:
 
-1. **Local Coder: Run Preflight** — *Model file* is now PASS
-2. **Local Coder: Start Local Runtime** — the first start is slow while 10 GB
+1. **Local Coder: Run Preflight** — *Model file* is now PASS, and *Draft model*
+   is PASS if the optional drafter downloaded
+2. **Local Coder: Start Local Runtime** — the first start is slow while 15.6 GiB
    pages in; later starts are quicker against a warm file cache
 3. **Local Coder: Open Chat**
 
@@ -156,8 +196,9 @@ endpoint.
 
 ## Step 8 — Decide whether it is actually good
 
-Getting a reply proves the plumbing, not the model. This profile is an
-aggressive 2-bit quantization and that is the open question about it.
+Getting a reply proves the plumbing, not the model. Muse Glimmer 30B is a 4-bit
+kquant chosen for agentic chat, and its coding quality on your codebase is the
+open question.
 
 1. Select a function and run **Local Coder: Explain Selection**.
 2. Run **Local Coder: Generate Tests for Selection**; check the tests compile.
@@ -166,9 +207,27 @@ aggressive 2-bit quantization and that is the open question about it.
 4. Watch Task Manager with your usual language servers running. Sustained hard
    page faults mean the context or prompt cache is too large for the machine.
 
-If quality disappoints, that is a quantization question, not a setup one.
-[MODEL_SELECTION.md](MODEL_SELECTION.md) describes the 4-bit control profile and
-the evidence worth gathering before switching.
+If quality disappoints, that is a model question, not a setup one.
+[MODEL_SELECTION.md](MODEL_SELECTION.md) describes the alternative profiles and
+the evidence worth gathering before switching. Note that switching to a profile
+whose weights are not staged in the bucket means staging them first.
+
+### Finding the real context limit
+
+The manifest pins `contextSize` to 16384 conservatively, because raising it above
+what the model was trained for degrades output quality silently. The trained
+limit is printed only by the loader. To read it, run the smoke test — it now
+extracts the value for you:
+
+```powershell
+.\scripts\Invoke-SmokeTest.ps1 `
+  -RuntimePath "$env:USERPROFILE\.vscode\extensions\restricted-local.restricted-local-coder-0.2.0\runtime\win32-x64\llama-server.exe" `
+  -ModelPath "$env:LOCALAPPDATA\RestrictedLocalCoder\models\muse-glimmer-30B-kquant-17gb.gguf"
+```
+
+It prints `Model trained context (n_ctx_train): <N> tokens` and the GPU layer
+count actually offloaded. Never set `runtime.contextSize` above that `N`. Staying
+below it is a memory decision; going above it is a correctness one.
 
 ---
 
@@ -180,7 +239,13 @@ the evidence worth gathering before switching.
 4. `runtime.threads` near the physical core count, not the logical count; extra
    threads can slow memory-bound decoding.
 5. Leave inline completions off during long chats — every typing pause can
-   otherwise schedule inference.
+   otherwise schedule inference. With Muse Glimmer this is moot; the profile has
+   no FIM tokens and the request is refused.
+6. Leave `runtime.gpuLayers` on `auto`. If preflight reports VRAM below the
+   profile's `minVramGiB`, compare `off` against `auto` with the benchmark
+   script before assuming a partial offload helps.
+7. `runtime.draftMaxTokens` defaults to 16. Raise it only if the drafter is
+   agreeing often; when it disagrees, larger drafts cost throughput.
 
 ---
 
@@ -195,6 +260,10 @@ the evidence worth gathering before switching.
 | Download fails at once | Mirror unreachable | Run the step 5 check |
 | Download stops partway | Network interruption | Rerun; it resumes |
 | Hash mismatch after downloading | Stale extension build, or a corrupt copy | Confirm step 1 removed the old install, then reinstall |
+| Preflight: Draft model WARN | Optional drafter not downloaded | Rerun **Download or Repair Model**; the weights are skipped if already valid |
+| Preflight: GPU offload WARN | No NVIDIA device, or VRAM below the profile | Expected on a CPU-only machine; generation still works |
+| Inline suggestions never appear | Selected profile has `fim: false` | Expected for Muse Glimmer; use a Qwen profile if you need FIM |
+| Runtime log says "Draft model … is not installed" | Drafter absent | Harmless; speculative decoding is skipped |
 | Runtime will not start | Weights failed verification | Run preflight; *Model file* names the problem |
 | Very slow first response | 10 GB paging in | Expected cold; judge the second run |
 | Sustained page faults | Context or cache too large | 8K context, `promptCacheMiB: 0` |

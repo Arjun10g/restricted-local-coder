@@ -3,7 +3,11 @@ param(
     [Parameter(Mandatory = $true)][string]$RuntimePath,
     [Parameter(Mandatory = $true)][string]$ModelPath,
     [int]$Port = 18081,
-    [int]$StartupTimeoutSeconds = 600
+    [int]$StartupTimeoutSeconds = 600,
+    # Mirrors localCoder.runtime.gpuLayers: 'auto', 'off', or a layer count.
+    [string]$GpuLayers = 'auto',
+    # Optional drafter, mirroring localCoder.runtime.enableDraftModel.
+    [string]$DraftPath = ''
 )
 
 Set-StrictMode -Version Latest
@@ -19,6 +23,9 @@ function Quote-Argument([string]$Value) {
     return '"' + ($Value -replace '(\\*)"', '$1$1\"' -replace '(\\+)$', '$1$1') + '"'
 }
 
+# Kept deliberately in step with RuntimeManager.buildArguments. If the extension
+# starts the server with flags this script does not exercise, a green smoke test
+# stops being evidence that the extension will start.
 $Arguments = @(
     '--model', $ModelPath, '--alias', 'local-coder',
     '--host', '127.0.0.1', '--port', [string]$Port,
@@ -27,7 +34,23 @@ $Arguments = @(
     '--batch-size', '256', '--ubatch-size', '64', '--parallel', '1',
     '--cache-ram', '512', '--no-cache-idle-slots',
     '--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0',
-    '--load-mode', 'mmap', '--flash-attn', 'auto', '--jinja',
+    '--load-mode', 'mmap', '--flash-attn', 'auto'
+)
+
+if ($GpuLayers -ne 'off') {
+    $Layers = if ($GpuLayers -eq 'auto') { '-1' } else { [string]([int]$GpuLayers) }
+    $Arguments += @('--n-gpu-layers', $Layers)
+}
+
+if ($DraftPath) {
+    $DraftPath = (Resolve-Path -LiteralPath $DraftPath).Path
+    # The pinned llama.cpp tag removed --draft-max in favour of this spelling.
+    $Arguments += @('--model-draft', $DraftPath, '--spec-draft-n-max', '16')
+    if ($GpuLayers -ne 'off') { $Arguments += @('--n-gpu-layers-draft', '-1') }
+}
+
+$Arguments += @(
+    '--jinja',
     '--no-webui', '--no-agent', '--offline', '--cors-origins', 'localhost',
     '--no-cors-credentials', '--no-slots', '--log-colors', 'off', '--log-timestamps'
 )
@@ -83,5 +106,21 @@ finally {
     Set-Content -LiteralPath (Join-Path $LogDir 'stdout.log') -Value $Stdout
     Set-Content -LiteralPath (Join-Path $LogDir 'stderr.log') -Value $Stderr
     Write-Host "Runtime logs: $LogDir"
+
+    # The manifest keeps contextSize conservative until the model's real trained
+    # context is known. It is printed only by the loader, so surface it here
+    # rather than making someone dig through the log by hand.
+    $AllOutput = "$Stdout`n$Stderr"
+    $TrainedContext = [regex]::Match($AllOutput, 'n_ctx_train\s*=\s*(\d+)')
+    if ($TrainedContext.Success) {
+        Write-Host ("Model trained context (n_ctx_train): {0} tokens" -f $TrainedContext.Groups[1].Value) -ForegroundColor Cyan
+        Write-Host 'The manifest contextSize must not exceed this value.'
+    }
+    $OffloadedLayers = [regex]::Match($AllOutput, 'offloaded\s+(\d+)/(\d+)\s+layers\s+to\s+GPU')
+    if ($OffloadedLayers.Success) {
+        Write-Host ("GPU offload: {0} of {1} layers" -f $OffloadedLayers.Groups[1].Value, $OffloadedLayers.Groups[2].Value) -ForegroundColor Cyan
+    } elseif ($GpuLayers -ne 'off') {
+        Write-Host 'GPU offload: the log reported none, so this run was CPU-only.' -ForegroundColor Yellow
+    }
     $Process.Dispose()
 }

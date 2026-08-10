@@ -37,8 +37,8 @@ Runs entirely on GitHub runners. Costs nothing on your laptop.
 Once the `parts` block from Stage B is committed:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 The `Build platform VSIX` workflow compiles the pinned `llama.cpp` for four
@@ -46,8 +46,8 @@ targets, packages each into a platform VSIX with a SHA-256 sidecar, and attaches
 them to a GitHub release. The workstation needs only:
 
 ```
-restricted-local-coder-0.1.0-win32-x64.vsix
-restricted-local-coder-0.1.0-win32-x64.vsix.sha256
+restricted-local-coder-0.2.0-win32-x64.vsix
+restricted-local-coder-0.2.0-win32-x64.vsix.sha256
 ```
 
 To rehearse the build without publishing anything, run the workflow manually
@@ -79,13 +79,13 @@ wastes the whole download.
 ### Steps
 
 1. Download the exact file named in `extension/models/manifest.json` for the
-   profile you are deploying (default `qwen3-coder-30b-a3b-iq2m`):
-   `Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf`.
+   profile you are deploying (default `muse-glimmer-30b-kquant`):
+   `muse-glimmer-30B-kquant-17gb.gguf`.
 
 2. Verify it before doing anything else:
 
    ```powershell
-   (Get-FileHash .\Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf -Algorithm SHA256).Hash.ToLower()
+   (Get-FileHash .\muse-glimmer-30B-kquant-17gb.gguf -Algorithm SHA256).Hash.ToLower()
    ```
 
    It must equal the `acceptedSha256` entry in the manifest. If it does not,
@@ -95,9 +95,9 @@ wastes the whole download.
 
    ```powershell
    .\scripts\Publish-ModelParts.ps1 `
-     -ModelPath .\Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf `
+     -ModelPath .\muse-glimmer-30B-kquant-17gb.gguf `
      -Repository <owner>/restricted-local-coder `
-     -Tag model-iq2m-v1 `
+     -Tag model-muse-glimmer-v1 `
      -OutputDirectory E:\model-parts
    ```
 
@@ -143,14 +143,14 @@ wastes the whole download.
 Copy the `.vsix` and its `.sha256` across, then confirm the file is intact:
 
 ```powershell
-(Get-FileHash .\restricted-local-coder-0.1.0-win32-x64.vsix -Algorithm SHA256).Hash.ToLower()
-Get-Content .\restricted-local-coder-0.1.0-win32-x64.vsix.sha256
+(Get-FileHash .\restricted-local-coder-0.2.0-win32-x64.vsix -Algorithm SHA256).Hash.ToLower()
+Get-Content .\restricted-local-coder-0.2.0-win32-x64.vsix.sha256
 ```
 
 Install it:
 
 ```powershell
-code --install-extension .\restricted-local-coder-0.1.0-win32-x64.vsix
+code --install-extension .\restricted-local-coder-0.2.0-win32-x64.vsix
 ```
 
 Or in VS Code: Extensions → `…` menu → **Install from VSIX**.
@@ -166,18 +166,22 @@ Open Settings (JSON) and add:
 
 ```json
 {
-  "localCoder.modelProfile": "qwen3-coder-30b-a3b-iq2m",
+  "localCoder.modelProfile": "muse-glimmer-30b-kquant",
   "localCoder.runtime.contextSize": 8192,
   "localCoder.runtime.promptCacheMiB": 512,
   "localCoder.runtime.autoStart": false,
+  "localCoder.runtime.gpuLayers": "auto",
+  "localCoder.runtime.enableDraftModel": true,
   "localCoder.inlineCompletions.enabled": false,
   "localCoder.context.maxCharacters": 48000
 }
 ```
 
 Start at 8K context. Raise it to 16K only after you have measured memory under
-real use. Leave inline completions off until chat is proven stable — every pause
-in typing can otherwise schedule inference.
+real use, and never above the `n_ctx_train` the smoke test reports. Leave inline
+completions off until chat is proven stable — every pause in typing can otherwise
+schedule inference. The default profile has no fill-in-the-middle tokens, so
+inline requests are refused for it regardless of this setting.
 
 If an internal HTTPS mirror also exists, add it and it will be tried ahead of
 GitHub:
