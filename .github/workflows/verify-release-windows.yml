@@ -17,6 +17,71 @@ permissions:
   contents: read
 
 jobs:
+  # The workstation runs powershell.exe, which is Windows PowerShell 5.1, and it
+  # differs from PowerShell 7 in ways that matter here: stderr from a native
+  # command raises NativeCommandError when ErrorActionPreference is Stop, and a
+  # .ps1 without a byte-order mark is read as Windows-1252. Neither reproduces on
+  # a developer machine running pwsh, so the bootstrap is exercised here instead.
+  bootstrap-windows-powershell-51:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Confirm the interpreter really is 5.1
+        shell: powershell
+        run: |
+          $PSVersionTable.PSVersion.ToString()
+          if ($PSVersionTable.PSVersion.Major -ne 5) {
+            throw "Expected Windows PowerShell 5.1, got $($PSVersionTable.PSVersion)"
+          }
+
+      - name: Stub the VS Code CLI so it is chatty on stderr, as the real one is
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path C:\stub | Out-Null
+          $lines = @(
+            '@echo off',
+            'echo DeprecationWarning: punycode is deprecated 1>&2',
+            'if "%1"=="--uninstall-extension" (',
+            '  echo Extension is not installed. 1>&2',
+            '  exit /b 1',
+            ')',
+            'echo Extension was successfully installed.',
+            'exit /b 0'
+          )
+          Set-Content -LiteralPath C:\stub\code.cmd -Value $lines -Encoding ASCII
+          Get-Content C:\stub\code.cmd
+
+      - name: Run the bootstrap end to end under 5.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PATH = "C:\stub;$env:PATH"
+          New-Item -ItemType Directory -Force -Path C:\wstest | Out-Null
+          # -File is how the documented command invokes it, so use the same form.
+          powershell -ExecutionPolicy Bypass -File scripts\Start-Workstation.ps1 `
+            -WorkDir C:\wstest `
+            -SettingsPath C:\wstest\settings.json
+          if ($LASTEXITCODE -ne 0) {
+            throw "The bootstrap exited $LASTEXITCODE under Windows PowerShell 5.1"
+          }
+          Write-Host 'Bootstrap completed under Windows PowerShell 5.1.' -ForegroundColor Green
+
+      - name: Confirm it wrote the settings it claims to
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $settings = Get-Content C:\wstest\settings.json -Raw | ConvertFrom-Json
+          $settings | ConvertTo-Json -Depth 5
+          foreach ($key in @('localCoder.modelProfile', 'localCoder.modelMirrorBaseUrl')) {
+            if (-not $settings.PSObject.Properties.Name.Contains($key)) {
+              throw "$key was not written"
+            }
+          }
+
   verify:
     runs-on: windows-latest
     timeout-minutes: 20

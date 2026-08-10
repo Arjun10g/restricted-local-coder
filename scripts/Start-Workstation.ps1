@@ -47,6 +47,36 @@ $ProgressPreference = 'SilentlyContinue'   # a visible progress bar makes Invoke
 function Write-Step([string]$Text) { Write-Host "`n==> $Text" -ForegroundColor Cyan }
 
 <#
+    Run an external program and return its exit code and combined output.
+
+    This exists because $ErrorActionPreference = 'Stop' makes PowerShell treat
+    anything a native program writes to stderr as a terminating error --
+    surfacing as "NativeCommandError" / RemoteException -- even when the program
+    succeeded. The VS Code CLI writes to stderr routinely, so installing would
+    abort on a message that was not an error at all.
+
+    Exit codes are the reliable signal from a native tool, so the preference is
+    lowered around the call and the code is checked explicitly afterwards.
+#>
+function Invoke-Native {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [string[]]$ArgumentList = @()
+    )
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = & $FilePath @ArgumentList 2>&1 | ForEach-Object { [string]$_ }
+        return [pscustomobject]@{
+            ExitCode = $LASTEXITCODE
+            Output   = ($output -join [Environment]::NewLine)
+        }
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+}
+
+<#
     True when the JSON text uses VS Code's JSONC extensions - comments or a
     trailing comma.
 
@@ -190,8 +220,9 @@ if ($SkipInstall) {
     # Remove any earlier build first. Leaving one behind is not fatal, but it
     # makes diagnosing the next problem harder, and an older folder is what a
     # still-running VS Code keeps using.
-    $extensionRoot = Join-Path $env:USERPROFILE '.vscode\extensions'
-    if (Test-Path -LiteralPath $extensionRoot) {
+    $profileRoot = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
+    $extensionRoot = if ($profileRoot) { Join-Path $profileRoot '.vscode\extensions' } else { '' }
+    if ($extensionRoot -and (Test-Path -LiteralPath $extensionRoot)) {
         $existing = @(Get-ChildItem -LiteralPath $extensionRoot -Directory -Filter 'restricted-local.restricted-local-coder-*')
         foreach ($item in $existing) {
             if ($item.Name -notlike "*-$Version-*") {
@@ -199,17 +230,22 @@ if ($SkipInstall) {
             }
         }
         if ($existing.Count -gt 0) {
-            & $CodeCommand --uninstall-extension restricted-local.restricted-local-coder 2>&1 | Out-Null
+            # An uninstall of something not present is not a problem worth
+            # stopping for, so its exit code is deliberately not checked.
+            $null = Invoke-Native -FilePath $CodeCommand -ArgumentList @('--uninstall-extension', 'restricted-local.restricted-local-coder')
         }
     }
 
-    & $CodeCommand --install-extension $VsixPath --force
-    if ($LASTEXITCODE -ne 0) { throw "code --install-extension exited with $LASTEXITCODE" }
+    $install = Invoke-Native -FilePath $CodeCommand -ArgumentList @('--install-extension', $VsixPath, '--force')
+    if ($install.Output) { Write-Host $install.Output }
+    if ($install.ExitCode -ne 0) {
+        throw "code --install-extension exited with $($install.ExitCode)"
+    }
     Write-Good "installed v$Version"
 
     # Verify what is actually on disk, rather than trusting the exit code.
     $installed = @()
-    if (Test-Path -LiteralPath $extensionRoot) {
+    if ($extensionRoot -and (Test-Path -LiteralPath $extensionRoot)) {
         $installed = @(Get-ChildItem -LiteralPath $extensionRoot -Directory -Filter 'restricted-local.restricted-local-coder-*' |
                        ForEach-Object { $_.Name })
     }
