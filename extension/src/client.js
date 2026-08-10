@@ -168,6 +168,47 @@ class LlamaClient {
     return { text: output, usage };
   }
 
+  /**
+   * A single non-streaming turn that may return tool calls.
+   *
+   * Streaming is not used here because a tool call is only actionable once it is
+   * complete, and reassembling partial JSON argument deltas adds a parser whose
+   * failure mode is executing a half-formed request.
+   */
+  async chatWithTools({ messages, profile, tools, signal, maxTokens }) {
+    throwIfAborted(signal);
+    const sampling = profile?.sampling ?? {};
+    const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: this.headers(),
+      body: JSON.stringify({
+        model: this.modelAlias,
+        messages,
+        tools,
+        tool_choice: 'auto',
+        stream: false,
+        max_tokens: maxTokens ?? profile?.maxOutputTokens ?? 2048,
+        temperature: sampling.temperature ?? 0.2,
+        top_p: sampling.topP ?? 0.9,
+        top_k: sampling.topK ?? 40,
+        min_p: sampling.minP ?? 0.02,
+        repeat_penalty: sampling.repeatPenalty ?? 1.0,
+      }),
+      signal,
+    });
+    if (!response.ok) {
+      await parseErrorResponse(response);
+    }
+    const payload = await response.json();
+    if (payload.error) {
+      throw new LlamaHttpError(extractErrorMessage(payload, 'Tool-calling request failed'), response.status, payload);
+    }
+    return {
+      message: payload.choices?.[0]?.message ?? {},
+      usage: payload.usage ?? null,
+    };
+  }
+
   async completeFim({ prefix, suffix, profile, signal, maxTokens = 96 }) {
     throwIfAborted(signal);
     // Sending Qwen control tokens to a model that has none produces confident

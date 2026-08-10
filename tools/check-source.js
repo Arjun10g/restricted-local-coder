@@ -62,6 +62,44 @@ for (const required of ['Range', 'Content-Range', 'GGUF_MAGIC', 'sha256', 'requi
   assert.ok(downloader.includes(required), `Downloader is missing ${required}`);
 }
 
+// Agent mode is the only part of this extension that can cause an effect
+// outside the editor, so its invariants are asserted rather than assumed.
+const agentRoot = path.join(extensionRoot, 'src', 'agent');
+assert.ok(settings['localCoder.agent.mode'], 'Agent mode must be a declared, user-visible setting');
+assert.equal(settings['localCoder.agent.mode'].default, 'off', 'Agent mode must be disabled by default');
+assert.ok(settings['localCoder.agent.maxSteps'], 'The agent step cap must be user-visible');
+
+const permissions = fs.readFileSync(path.join(agentRoot, 'permissions.js'), 'utf8');
+for (const required of ['matchesRule', 'resolveInsideWorkspace', 'DEFAULT_COMMAND_RULES']) {
+  assert.ok(permissions.includes(required), `Agent permissions are missing ${required}`);
+}
+// Joining argv into a string to decide permission is exactly the bug the
+// argv-prefix rule exists to prevent.
+assert.ok(
+  !/argv\s*\.\s*join\s*\([^)]*\)\s*(?:\.includes|\.startsWith|\.match|===|==)/.test(permissions),
+  'Agent permissions must never decide on a joined command string'
+);
+for (const rule of ['rm', 'curl', 'wget', 'sh', 'bash', 'powershell']) {
+  assert.ok(
+    !new RegExp(`\\['${rule}'`).test(permissions.split('const MODES')[0]),
+    `${rule} must not be a default agent command`
+  );
+}
+
+const agentTools = fs.readFileSync(path.join(agentRoot, 'tools.js'), 'utf8');
+assert.ok(agentTools.includes('shell: false'), 'Agent commands must never run through a shell');
+assert.ok(agentTools.includes('isSensitivePath'), 'Agent file reads must honour the secret deny-list');
+assert.ok(agentTools.includes('neutralizeContextMarkup'), 'Tool output re-enters the prompt and must be neutralized');
+assert.ok(!/\bexecSync\b|\bspawnSync\b/.test(agentTools), 'Agent tools must not use synchronous process helpers');
+
+const agentLoop = fs.readFileSync(path.join(agentRoot, 'agentLoop.js'), 'utf8');
+assert.ok(agentLoop.includes('maxSteps'), 'The agent loop must be bounded');
+// Every effect has to funnel through the one place permission is decided.
+assert.ok(
+  !/require\(['"]\.\/(?:tools)?['"]\)[\s\S]*?runCommandTool/.test(agentLoop),
+  'The agent loop must not reach a tool implementation directly; it goes through executeTool'
+);
+
 const contextRules = fs.readFileSync(path.join(extensionRoot, 'src', 'contextRules.js'), 'utf8');
 for (const sensitive of ["'.env'", "'.vscode'", "'.ssh'", "'.aws'", "'.pem'", "'.key'", "'.gguf'", "'credentials.json'"]) {
   assert.ok(contextRules.includes(sensitive), `Context exclusions are missing ${sensitive}`);
