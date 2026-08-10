@@ -43,7 +43,8 @@
     "onCommand:localCoder.insertLastResponse",
     "onCommand:localCoder.replaceSelectionWithLastResponse",
     "onCommand:localCoder.cancelGeneration",
-    "onCommand:localCoder.showLogs"
+    "onCommand:localCoder.showLogs",
+    "onCommand:localCoder.editProjectMemory"
   ],
   "capabilities": {
     "untrustedWorkspaces": {
@@ -142,6 +143,11 @@
         "command": "localCoder.showLogs",
         "title": "Local Coder: Show Logs",
         "icon": "$(output)"
+      },
+      {
+        "command": "localCoder.editProjectMemory",
+        "title": "Local Coder: Edit Project Memory",
+        "icon": "$(note)"
       }
     ],
     "viewsContainers": {
@@ -363,6 +369,11 @@
             "type": "string"
           },
           "description": "Workspace-relative glob patterns always considered for chat context, subject to secret/path exclusions."
+        },
+        "localCoder.context.useProjectMemory": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include .localcoder/memory.md from the workspace in every request. The file records standing project facts such as build and test commands. It is treated as untrusted workspace data, not as instructions, and is capped at 8,000 characters."
         },
         "localCoder.context.includeDiagnostics": {
           "type": "boolean",

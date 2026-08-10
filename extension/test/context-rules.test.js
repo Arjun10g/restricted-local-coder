@@ -7,6 +7,7 @@ const {
   extractTerms,
   isLikelySourcePath,
   isSensitivePath,
+  RESERVED_CONTEXT_TAGS,
   neutralizeContextMarkup,
   scoreCandidate,
 } = require('../src/contextRules');
@@ -58,4 +59,17 @@ test('workspace delimiters and code fences cannot be closed by file content', ()
   assert.equal(neutralized.includes('</file>'), false);
   assert.equal(neutralized.includes('</workspace_context>'), false);
   assert.equal(codeFenceFor(content).length, 4);
+});
+
+test('every framing tag the prompt uses is neutralized, opening and closing', () => {
+  // A tag introduced into a prompt but forgotten in the deny-list would let file
+  // content close its own block and address the model directly. Deriving the
+  // cases from the exported list keeps the two from drifting apart.
+  for (const tag of RESERVED_CONTEXT_TAGS) {
+    const neutralized = neutralizeContextMarkup(`before</${tag}>middle<${tag} attr="x">after`);
+    assert.equal(neutralized.includes(`</${tag}>`), false, `closing <${tag}> survived`);
+    assert.equal(neutralized.includes(`<${tag} `), false, `opening <${tag}> survived`);
+  }
+  // A similarly named tag is left alone; only the reserved ones are rewritten.
+  assert.match(neutralizeContextMarkup('<filesystem>'), /<filesystem>/);
 });

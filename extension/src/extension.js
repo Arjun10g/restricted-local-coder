@@ -6,6 +6,7 @@ const { ContextBuilder } = require('./contextBuilder');
 const { InlineCompletionProvider } = require('./inlineCompletion');
 const { ModelRegistry } = require('./modelRegistry');
 const { runPreflight } = require('./preflight');
+const { ensureProjectMemory } = require('./projectMemory');
 const { RuntimeManager } = require('./runtimeManager');
 const { isAbortError, safeErrorMessage } = require('./util');
 
@@ -115,6 +116,27 @@ async function activate(context) {
   register(context, 'localCoder.replaceSelectionWithLastResponse', () => chat.insertLastResponse(true), output);
   register(context, 'localCoder.cancelGeneration', () => chat.cancel(), output);
   register(context, 'localCoder.showLogs', () => output.show(true), output);
+  register(
+    context,
+    'localCoder.editProjectMemory',
+    async () => {
+      const folder = vscode.workspace.workspaceFolders?.[0];
+      if (!folder) {
+        void vscode.window.showWarningMessage('Open a folder before creating project memory.');
+        return;
+      }
+      // Creating is 'wx', so an existing memory file is opened, never replaced.
+      const { file, created } = await ensureProjectMemory(folder.uri.fsPath);
+      const document = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+      await vscode.window.showTextDocument(document);
+      if (created) {
+        void vscode.window.showInformationMessage(
+          'Created .localcoder/memory.md. It is sent with every request, so keep it short.'
+        );
+      }
+    },
+    output
+  );
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(async (event) => {

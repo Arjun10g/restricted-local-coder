@@ -118,11 +118,14 @@ function scoreCandidate(relativePath, content, terms, activeDirectory = '') {
 }
 
 
+// Every tag the prompt uses to frame untrusted text must appear here. A tag
+// added to a prompt but forgotten here lets file content close its own block and
+// address the model as though it were the extension.
+const RESERVED_CONTEXT_TAGS = ['workspace_context', 'project_memory', 'file', 'diagnostics'];
+
 function neutralizeContextMarkup(value) {
-  return String(value ?? '').replace(
-    /<(\/?)(workspace_context|file|diagnostics)(?=[\s>])/gi,
-    (_match, slash, name) => `&lt;${slash}${name}`
-  );
+  const pattern = new RegExp(`<(/?)(${RESERVED_CONTEXT_TAGS.join('|')})(?=[\\s>])`, 'gi');
+  return String(value ?? '').replace(pattern, (_match, slash, name) => `&lt;${slash}${name}`);
 }
 
 function codeFenceFor(value) {
@@ -139,6 +142,7 @@ function languageFence(documentOrPath) {
 }
 
 module.exports = {
+  RESERVED_CONTEXT_TAGS,
   extractTerms,
   codeFenceFor,
   isLikelySourcePath,
