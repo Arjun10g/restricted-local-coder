@@ -29,7 +29,7 @@ jobs:
             runtime_key: darwin-arm64
             vsce_target: darwin-arm64
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    timeout-minutes: 25
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,58 +43,21 @@ jobs:
       - name: Validate source before native build
         run: npm run validate
 
-      - name: Check out pinned llama.cpp source
-        run: python tools/checkout-runtime-source.py --destination third_party/llama.cpp
-
-      # GGML_CPU_ALL_VARIANTS emits armv9.2 variants that use SME. The default
-      # GCC on the arm64 runner rejects that feature modifier, so select a
-      # toolchain that supports it rather than dropping CPU variants.
-      - name: Use an SME-capable compiler
-        if: matrix.runtime_key == 'linux-arm64'
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y gcc-14 g++-14
-          echo "CC=gcc-14" >> "$GITHUB_ENV"
-          echo "CXX=g++-14" >> "$GITHUB_ENV"
-          gcc-14 --version | head -1
-
-      - name: Configure CPU runtime without Web UI downloads
-        shell: bash
-        run: |
-          set -euo pipefail
-          cmake -S third_party/llama.cpp -B build/llama \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DLLAMA_BUILD_TESTS=OFF \
-            -DLLAMA_BUILD_EXAMPLES=OFF \
-            -DLLAMA_BUILD_SERVER=ON \
-            -DLLAMA_BUILD_TOOLS=ON \
-            -DLLAMA_BUILD_APP=OFF \
-            -DLLAMA_BUILD_UI=OFF \
-            -DLLAMA_USE_PREBUILT_UI=OFF \
-            -DLLAMA_OPENSSL=OFF \
-            -DBUILD_SHARED_LIBS=ON \
-            -DGGML_NATIVE=OFF \
-            -DGGML_BACKEND_DL=ON \
-            -DGGML_CPU_ALL_VARIANTS=ON \
-            -DGGML_CPU_KLEIDIAI=OFF
-
-      - name: Build llama-server
-        shell: bash
-        run: cmake --build build/llama --config Release --target llama-server -j 4
-
-      - name: Collect and execute runtime
+      # Repackage the pinned upstream release instead of compiling it. Every
+      # archive is checked against the SHA-256 in vendor/llama.cpp.lock.json
+      # before it is unpacked, and --verify runs the binary afterwards. Building
+      # from source remains available through scripts/ for governed rebuilds.
+      - name: Fetch and verify the pinned runtime
         run: >-
-          python tools/collect-runtime.py
-          --build-dir build/llama
-          --destination extension/runtime/${{ matrix.runtime_key }}
-          --source-dir third_party/llama.cpp
+          python tools/fetch-runtime.py
+          --key ${{ matrix.runtime_key }}
           --verify
 
-      # Windows does not ship the MSVC C/C++ runtime, and the target user has no
-      # administrator rights to install the redistributable. Carry it in the
-      # VSIX so the runtime directory is self-contained. Must run after
-      # collect-runtime.py, which clears its destination first.
+      # Windows does not ship the MSVC C/C++ runtime, the official llama.cpp zip
+      # does not carry it either, and the target user has no administrator rights
+      # to install the redistributable. Carry it in the VSIX so the runtime
+      # directory is self-contained. Must run after the fetch step, which clears
+      # its destination first.
       - name: Bundle the app-local MSVC runtime
         if: matrix.runtime_key == 'win32-x64'
         shell: pwsh
