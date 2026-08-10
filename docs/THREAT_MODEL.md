@@ -36,6 +36,10 @@
 | Malicious environment changes child behavior | strip `LLAMA_*`, `GGML_*`, HF and inherited loader variables; use only the bundled runtime directory for adjacent native libraries |
 | Huge prompt/cache exhausts memory | bounded context, one slot, one parallel request, prompt-cache cap, output limits/cancellation |
 | Extension update removes the model | model stored outside extension installation directory |
+| Chat transcript outlives the session on disk | persistence is opt-in (`chat.persistHistory`, default off); transcripts are written `0o600` by atomic rename into the extension's private global storage, never into the workspace, so they cannot be committed or re-entered as workspace context; bounded to 200 messages and 400,000 characters; deleted by "Clear conversation" whatever the setting |
+| Stored-transcript filenames disclose project names | the file is named by a SHA-256 digest of the workspace path, so the storage directory does not enumerate what a user works on |
+| Tampered transcript re-enters the prompt | a transcript is data, never instructions: on load, the schema version is checked, only `user`/`assistant` roles with non-empty string content survive, and unreadable or unknown-schema files are ignored rather than trusted. The system prompt is always rebuilt from source, never restored from disk |
+| Acceleration flags cannot be turned off by an operator | `check-source.js` asserts that every runtime flag has a declared setting, so a bad offload can always be disabled without rebuilding the VSIX |
 
 ## Residual risk
 

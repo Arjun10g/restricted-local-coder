@@ -369,6 +369,11 @@
           "default": true,
           "description": "Include active-document diagnostics in local prompts."
         },
+        "localCoder.chat.persistHistory": {
+          "type": "boolean",
+          "default": false,
+          "description": "Store this workspace's chat transcript so it survives restarting VS Code. Off by default: a transcript on disk outlives the session and can contain quoted source. It is written to the extension's private storage directory, never into the workspace, and “Clear conversation” deletes it."
+        },
         "localCoder.chat.maxHistoryTurns": {
           "type": "integer",
           "default": 6,

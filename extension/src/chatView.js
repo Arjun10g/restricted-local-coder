@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 const vscode = require('vscode');
 const { isAbortError, safeErrorMessage } = require('./util');
 const { isSensitivePath } = require('./contextRules');
+const { ConversationStore } = require('./conversationStore');
+const { availableHistoryTokens, selectHistory } = require('./historyBudget');
 
 function nonce() {
   return crypto.randomBytes(18).toString('base64url');
@@ -26,7 +28,47 @@ class ChatViewProvider {
     this.history = [];
     this.lastResponse = '';
     this.activeController = null;
+    this.store = new ConversationStore(context.globalStorageUri?.fsPath ?? context.globalStoragePath, outputChannel);
+    this.restored = false;
     this.runtimeSubscription = this.runtime.onDidChangeState((state) => this.postStatus(state));
+  }
+
+  workspacePath() {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
+  }
+
+  persistenceEnabled() {
+    return vscode.workspace.getConfiguration('localCoder').get('chat.persistHistory', false);
+  }
+
+  /**
+   * Loads a previous transcript once per session. Persistence is off by default,
+   * so this is normally a no-op; when it is on, a failure to read must not stop
+   * the chat from opening.
+   */
+  async restoreHistory() {
+    if (this.restored) return;
+    this.restored = true;
+    if (!this.persistenceEnabled()) return;
+    try {
+      const stored = await this.store.load(this.workspacePath());
+      if (stored.length > 0) {
+        this.history = stored;
+        this.output.appendLine(`[chat] Restored ${stored.length} stored message(s) for this workspace`);
+        this.post({ type: 'restored', count: stored.length });
+      }
+    } catch (error) {
+      this.output.appendLine(`[chat] Could not restore history: ${safeErrorMessage(error)}`);
+    }
+  }
+
+  async persistHistory() {
+    if (!this.persistenceEnabled()) return;
+    try {
+      await this.store.save(this.workspacePath(), this.history);
+    } catch (error) {
+      this.output.appendLine(`[chat] Could not persist history: ${safeErrorMessage(error)}`);
+    }
   }
 
   resolveWebviewView(webviewView) {
@@ -53,6 +95,7 @@ class ChatViewProvider {
     });
     this.postStatus(this.runtime.snapshot());
     this.postModel();
+    void this.restoreHistory();
   }
 
   async show() {
@@ -125,6 +168,12 @@ class ChatViewProvider {
         this.cancel();
         this.history = [];
         this.lastResponse = '';
+        // Clearing must remove the stored transcript too, whatever the current
+        // setting says. Leaving a file behind that a later session would restore
+        // would make "clear" untrue.
+        await this.store.clear(this.workspacePath()).catch((error) => {
+          this.output.appendLine(`[chat] Could not remove stored history: ${safeErrorMessage(error)}`);
+        });
         this.post({ type: 'cleared' });
         break;
       case 'setup': {
@@ -148,18 +197,24 @@ class ChatViewProvider {
     }
   }
 
-  boundedHistory() {
-    const maxTurns = vscode.workspace.getConfiguration('localCoder').get('chat.maxHistoryTurns', 6);
-    const messages = this.history.slice(-(maxTurns * 2));
-    let characters = 0;
-    const result = [];
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      const message = messages[index];
-      characters += message.content.length;
-      if (characters > 24000) break;
-      result.unshift(message);
-    }
-    return result;
+  /**
+   * Prior turns that fit alongside the system prompt, this request, and room for
+   * the reply. The budget follows the profile's context window rather than a
+   * fixed character count, which was wasteful on a 16K profile and unsafe on an
+   * 8K one.
+   */
+  boundedHistory({ systemText = '', userText = '' } = {}) {
+    const config = vscode.workspace.getConfiguration('localCoder');
+    const maxTurns = config.get('chat.maxHistoryTurns', 6);
+    const profile = this.models.getSelectedProfile();
+    const contextOverride = config.get('runtime.contextSize', 0);
+    const budget = availableHistoryTokens({
+      contextSize: contextOverride > 0 ? contextOverride : profile.contextSize,
+      systemText,
+      userText,
+      maxOutputTokens: profile.maxOutputTokens,
+    });
+    return selectHistory(this.history, budget, maxTurns);
   }
 
   async ask(prompt, options = {}) {
@@ -182,7 +237,7 @@ class ChatViewProvider {
       }
       const messages = [
         { role: 'system', content: context.system },
-        ...this.boundedHistory(),
+        ...this.boundedHistory({ systemText: context.system, userText: context.user }),
         { role: 'user', content: context.user },
       ];
       const result = await client.chatStream({
@@ -200,6 +255,7 @@ class ChatViewProvider {
         { role: 'user', content: prompt },
         { role: 'assistant', content: assistant }
       );
+      await this.persistHistory();
       this.post({ type: 'assistantDone', id: requestId, usage: result.usage ?? null });
       return assistant;
     } catch (error) {

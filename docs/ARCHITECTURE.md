@@ -47,7 +47,7 @@ flowchart LR
 2. The extension gathers bounded context from the active selection, nearby code, diagnostics, open files, lexical workspace retrieval, and explicitly configured files.
 3. Active sensitive files and common secret locations are rejected, including `.env*`, private keys, credential files, `.vscode`, `.ssh`, `.aws`, `.azure`, `.gnupg`, and `.kube`.
 4. Reserved wrapper tags are neutralized, code fences grow beyond any backtick run in the source, and the resulting blocks are explicitly labeled as untrusted data.
-5. Chat uses the OpenAI-compatible `/v1/chat/completions` route with streaming.
+5. Chat uses the OpenAI-compatible `/v1/chat/completions` route with streaming. How much prior conversation is resent is budgeted against the profile's context window rather than a fixed character count: the system prompt, the current request, and the reply allowance are subtracted first, a further 5% is held back against tokenizer drift, and whole turns are then selected newest-first. Turns are never truncated mid-message, since a cut-off assistant reply invites the model to continue something it never said.
 6. Inline completion uses llama.cpp's `/completion` route and fill-in-the-middle tokens, and is available only for profiles whose manifest entry sets `fim: true`. The control tokens default to Qwen's spelling and may be overridden per profile with `fimTemplate`. A profile declaring `fim: false` — including the current default — refuses the request rather than sending tokens the model was never trained on.
 7. Responses travel only over a bearer-authenticated loopback connection.
 
@@ -102,7 +102,7 @@ The API key is not placed on the process command line. Inherited `LLAMA_*`, `GGM
 - Validation record: VS Code global state; it stores only file metadata and the approved digest.
 - API key: VS Code SecretStorage.
 - Selected profile and accepted license: VS Code global state.
-- Conversation: memory only; cleared with the extension host.
+- Conversation: memory only by default, cleared with the extension host. Setting `localCoder.chat.persistHistory` to `true` stores the transcript for the current workspace under the extension's private global-storage directory — never inside the workspace, so it cannot be committed, retrieved by the lexical context pass, or read back as workspace context. The file is written `0o600` via an atomic rename, keyed by a SHA-256 digest of the workspace path so the directory listing does not enumerate projects, and capped at 200 messages and 400,000 characters. "Clear conversation" deletes it regardless of the setting.
 - Runtime logs: Local Coder output channel; prompt logging flags are blocked.
 
 ## Failure isolation
