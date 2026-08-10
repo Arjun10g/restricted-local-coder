@@ -98,11 +98,47 @@ Pick one route.
 
 ### 4a. Download a release asset (no account)
 
-Once a `v*` tag has been pushed, release assets download anonymously:
+Release assets download anonymously over plain HTTPS, with no sign-in and no
+`gh`. This is the route to prefer behind a proxy that interferes with the git
+protocol, because it is an ordinary file download.
+
+Browse the releases page and take the asset matching your platform, together
+with its `.sha256` sidecar:
+
+```
+https://github.com/<owner>/restricted-local-coder/releases
+```
+
+**Windows (PowerShell).** `curl` in PowerShell is an alias for
+`Invoke-WebRequest`, which does not understand curl's flags — `curl -LO` fails
+with *"cannot find parameter name LO"*. Use the native command instead. Setting
+`$ProgressPreference` is not cosmetic: the progress bar makes downloads several
+times slower.
+
+```powershell
+$ProgressPreference = 'SilentlyContinue'
+$base = "https://github.com/<owner>/restricted-local-coder/releases/download/<tag>"
+$name = "restricted-local-coder-0.1.0-win32-x64.vsix"
+
+Invoke-WebRequest -Uri "$base/$name"        -OutFile $name
+Invoke-WebRequest -Uri "$base/$name.sha256" -OutFile "$name.sha256"
+```
+
+Behind an HTTP proxy, add `-Proxy http://proxy.yourorg.com:8080` to both calls.
+
+Real curl also works on Windows 10 1803 and later, but the `.exe` is required
+so the alias is bypassed:
+
+```powershell
+curl.exe -L -O "$base/$name"
+```
+
+**macOS and Linux:**
 
 ```bash
-curl -LO https://github.com/<owner>/restricted-local-coder/releases/download/v0.1.0/restricted-local-coder-0.1.0-win32-x64.vsix
-curl -LO https://github.com/<owner>/restricted-local-coder/releases/download/v0.1.0/restricted-local-coder-0.1.0-win32-x64.vsix.sha256
+base=https://github.com/<owner>/restricted-local-coder/releases/download/<tag>
+curl -LO "$base/restricted-local-coder-0.1.0-linux-x64.vsix"
+curl -LO "$base/restricted-local-coder-0.1.0-linux-x64.vsix.sha256"
 ```
 
 ### 4b. Download a CI artifact (any signed-in account)
@@ -170,13 +206,17 @@ cd ..
 
 ### Verify before installing
 
+Never install a VSIX whose digest you have not checked. The two values printed
+here must be identical.
+
 ```powershell
-(Get-FileHash .\vsix\restricted-local-coder-0.1.0-win32-x64.vsix -Algorithm SHA256).Hash.ToLower()
-Get-Content .\vsix\restricted-local-coder-0.1.0-win32-x64.vsix.sha256
+(Get-FileHash .\restricted-local-coder-0.1.0-win32-x64.vsix -Algorithm SHA256).Hash.ToLower()
+Get-Content .\restricted-local-coder-0.1.0-win32-x64.vsix.sha256
 ```
 
 ```bash
-shasum -a 256 vsix/*.vsix && cat vsix/*.sha256
+shasum -a 256 restricted-local-coder-0.1.0-linux-x64.vsix
+cat restricted-local-coder-0.1.0-linux-x64.vsix.sha256
 ```
 
 ---
@@ -250,6 +290,69 @@ first, commit the manifest change, and only then build the VSIX.** A VSIX built
 beforehand has no knowledge of the source.
 
 ---
+
+## Troubleshooting the first few steps
+
+### `git clone` fails with `The requested URL returned error: 400`
+
+The repository is public, so a 400 comes from something between the machine and
+GitHub — usually a proxy or TLS inspector, not the repository. Diagnose first:
+
+```bash
+GIT_TRACE=1 GIT_CURL_VERBOSE=1 git clone https://github.com/<owner>/restricted-local-coder.git
+env | grep -i proxy
+git config --global --get-regexp '^http\.'
+```
+
+Then try, in this order:
+
+```bash
+git config --global http.version HTTP/1.1     # fixes most proxy-induced 400s
+git config --global protocol.version 0        # some proxies reject git protocol v2
+git config --global http.proxy http://proxy.yourorg.com:8080
+```
+
+If the git protocol is blocked outright, download the tree as a zip instead. It
+is one ordinary HTTPS GET and usually survives proxies that break git. You lose
+history, which does not matter for building, testing, or installing:
+
+```bash
+curl -L -o main.zip https://github.com/<owner>/restricted-local-coder/archive/refs/heads/main.zip
+unzip main.zip && cd restricted-local-coder-main && npm run validate
+```
+
+On Windows, prefer `Expand-Archive` over Explorer's *Extract All*, and keep the
+destination path short — deep paths under `Downloads` can silently truncate an
+extraction:
+
+```powershell
+Expand-Archive -Path .\main.zip -DestinationPath C:\coder -Force
+cd C:\coder\restricted-local-coder-main
+```
+
+### `npm run validate` fails with `ENOENT ... package.json` (errno -4058)
+
+You are in the wrong directory; nothing is broken. Extracting a zip through
+Windows Explorer usually nests the project one level deeper than expected.
+
+```powershell
+Get-ChildItem -Recurse -Depth 3 -Filter package.json | Select-Object FullName
+```
+
+Two files match. Use the **shorter** path — only the repository root has the
+`validate` script; `extension/package.json` is the extension manifest. Confirm
+you are in the right place before rerunning:
+
+```powershell
+node -p "require('./package.json').name"     # must print restricted-local-coder-repo
+```
+
+The repository root contains exactly:
+
+```
+CONTRIBUTING.md  LICENSE  README.md  SECURITY.md  THIRD_PARTY_NOTICES.md
+bench  docs  extension  package.json  scripts  tools  vendor
+```
 
 ## Contributing from a different GitHub account
 
