@@ -109,6 +109,16 @@ with its `.sha256` sidecar:
 https://github.com/<owner>/restricted-local-coder/releases
 ```
 
+> **Substitute every placeholder before running anything.** `<owner>` and
+> `<tag>` are not literal. Pasting them unchanged produces
+> `Invoke-WebRequest : The remote server returned an error: (404) Not Found`,
+> which looks like a missing file but is a malformed URL. Copy the real values
+> from the releases page.
+
+Asset names follow `restricted-local-coder-<version>-<runtime-key>.vsix`, where
+the runtime key is one of `win32-x64`, `darwin-arm64`, `linux-x64`, or
+`linux-arm64`.
+
 **Windows (PowerShell).** `curl` in PowerShell is an alias for
 `Invoke-WebRequest`, which does not understand curl's flags — `curl -LO` fails
 with *"cannot find parameter name LO"*. Use the native command instead. Setting
@@ -117,6 +127,8 @@ times slower.
 
 ```powershell
 $ProgressPreference = 'SilentlyContinue'
+
+# Replace the owner and tag with the real ones from the releases page.
 $base = "https://github.com/<owner>/restricted-local-coder/releases/download/<tag>"
 $name = "restricted-local-coder-0.1.0-win32-x64.vsix"
 
@@ -139,6 +151,21 @@ curl.exe -L -O "$base/$name"
 base=https://github.com/<owner>/restricted-local-coder/releases/download/<tag>
 curl -LO "$base/restricted-local-coder-0.1.0-linux-x64.vsix"
 curl -LO "$base/restricted-local-coder-0.1.0-linux-x64.vsix.sha256"
+```
+
+**Confirm you downloaded a VSIX and not an error page.** A proxy that blocks the
+request often returns an HTML page with status 200, which saves happily under a
+`.vsix` name and then fails to install. A real VSIX is megabytes and is a zip,
+so it starts with `PK`:
+
+```powershell
+(Get-Item $name).Length          # expect millions of bytes, not a few thousand
+Get-Content $name -TotalCount 1  # a VSIX begins with "PK"; a block page shows HTML
+```
+
+```bash
+ls -l restricted-local-coder-*.vsix
+file restricted-local-coder-*.vsix   # expect: Zip archive data
 ```
 
 ### 4b. Download a CI artifact (any signed-in account)
@@ -292,6 +319,35 @@ beforehand has no knowledge of the source.
 ---
 
 ## Troubleshooting the first few steps
+
+Most first-run failures are environmental rather than defects in the build.
+
+| Message | Cause | Fix |
+|---|---|---|
+| `cannot find parameter name LO` | PowerShell aliases `curl` to `Invoke-WebRequest` | Use `Invoke-WebRequest -OutFile`, or spell it `curl.exe` |
+| `Invoke-WebRequest : ... (404) Not Found` | `<owner>` or `<tag>` pasted literally, or a wrong asset name | Copy the real URL from the releases page |
+| `... (407) Proxy Authentication Required` | Proxy needs credentials | Add `-Proxy` and `-ProxyCredential (Get-Credential)` |
+| `Could not establish trust relationship for the SSL/TLS secure channel` | TLS inspection with a private CA | Import the corporate root CA, or download through a browser |
+| `The term 'Invoke-WebRequest' is not recognized` | Very old or constrained PowerShell | Use `curl.exe`, or a browser |
+| Downloaded `.vsix` is a few KB | Proxy returned an HTML block page with status 200 | Check the size and `PK` header; fetch through a browser |
+| `Get-FileHash` output differs from the sidecar | Truncated or tampered download | Delete and download again; never install on a mismatch |
+| `'code' is not recognized` | VS Code CLI not on `PATH` | Install from the VSIX UI, or add VS Code's `bin` to `PATH` |
+| `is not compatible with VS Code <version>` | VS Code older than 1.95.0 | Update VS Code |
+| `Unable to install extension ... platform` | Wrong runtime key for the machine | Download the asset matching the OS and CPU |
+| `ENOENT ... package.json` (`errno -4058`) | Wrong working directory | See below |
+| `The requested URL returned error: 400` on clone | Proxy or TLS inspector | See below |
+
+### VS Code CLI not on `PATH`
+
+Installing from the command line is optional. In VS Code: **Extensions** view →
+`…` menu → **Install from VSIX…** → pick the file. Or add the CLI to `PATH`:
+
+```powershell
+$env:PATH += ";$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin"
+```
+
+To make it permanent, run **Shell Command: Install 'code' command in PATH**
+from the Command Palette.
 
 ### `git clone` fails with `The requested URL returned error: 400`
 
