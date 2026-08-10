@@ -5,6 +5,14 @@ literal and copy-pasteable; nothing needs substituting.
 
 If you only read one section, read [Section 2](#2-the-fast-path--one-command).
 
+> **One thing worth knowing before you paste anything.** Copying from a rendered
+> page can convert straight quotes (`"`) into curly ones, which PowerShell
+> rejects with `The string is missing the terminator: "`. The commands on the
+> main path deliberately use **no quotation marks at all**, so they cannot fail
+> that way. A handful of later commands do need quotes — if one of those errors,
+> retype the quote characters by hand. And if you are stuck at a `>>` prompt,
+> press `Ctrl+C` before doing anything else.
+
 ---
 
 ## Contents
@@ -94,14 +102,24 @@ This downloads the extension, verifies its digest, installs it, and writes your
 settings. It does **not** download the weights — that happens inside VS Code,
 where you get progress and resume.
 
+Paste these **one line at a time**, pressing Enter after each. There are no
+quotation marks anywhere in them, deliberately — see the note below.
+
 ```powershell
-New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Arjun10g/restricted-local-coder/main/scripts/Start-Workstation.ps1" -OutFile "C:\coder\Start-Workstation.ps1"
-powershell -ExecutionPolicy Bypass -File "C:\coder\Start-Workstation.ps1"
+mkdir C:\coder -Force
+iwr https://raw.githubusercontent.com/Arjun10g/restricted-local-coder/main/scripts/Start-Workstation.ps1 -OutFile C:\coder\bootstrap.ps1
+powershell -ExecutionPolicy Bypass -File C:\coder\bootstrap.ps1
 ```
 
-Want to read it before running it? Sensible. Open
-`C:\coder\Start-Workstation.ps1` between the second and third lines.
+> **Why no quotes?** Copying from a rendered web page or a chat window can turn
+> straight quotes (`"`) into curly ones (`"` and `"`), which PowerShell does not
+> recognise. The result is `The string is missing the terminator: "`. Commands
+> without quotes cannot fail that way. If you have already hit that error, press
+> `Ctrl+C` first: PowerShell is waiting at a `>>` prompt for you to close the
+> string, and everything typed until then will also fail.
+
+Want to read it before running it? Sensible. Open `C:\coder\bootstrap.ps1`
+between the second and third lines.
 
 What it does, in order:
 
@@ -126,13 +144,16 @@ Use this if the script fails, or if you prefer doing it yourself.
 ### 3.1 Download the extension
 
 ```powershell
-New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
-Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.3.0/restricted-local-coder-0.3.0-win32-x64.vsix" -OutFile "C:\coder\coder.vsix"
+mkdir C:\coder -Force
+iwr https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.3.0/restricted-local-coder-0.3.0-win32-x64.vsix -OutFile C:\coder\coder.vsix
 ```
 
-> `curl` in PowerShell is an alias for `Invoke-WebRequest` and rejects curl
-> flags, so `curl -LO ...` fails with *"cannot find parameter name LO"*. Use the
-> command above as written.
+> Two things that bite here, both avoided above:
+>
+> - `curl` in PowerShell is an alias for `Invoke-WebRequest` and rejects curl
+>   flags, so `curl -LO ...` fails with *"cannot find parameter name LO"*.
+> - Quotation marks copied from a rendered page are often curly, which produces
+>   *"The string is missing the terminator"*. These commands use none.
 
 Behind a proxy that needs your credentials:
 
@@ -146,10 +167,10 @@ Other routes, if both fail:
 
 ```powershell
 # Real curl, which ships with Windows 10+ as curl.exe
-curl.exe -L -o "C:\coder\coder.vsix" "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.3.0/restricted-local-coder-0.3.0-win32-x64.vsix"
+curl.exe -L -o C:\coder\coder.vsix https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.3.0/restricted-local-coder-0.3.0-win32-x64.vsix
 
 # Background Intelligent Transfer Service, which often works when others do not
-Start-BitsTransfer -Source "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.3.0/restricted-local-coder-0.3.0-win32-x64.vsix" -Destination "C:\coder\coder.vsix"
+Start-BitsTransfer -Source https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.3.0/restricted-local-coder-0.3.0-win32-x64.vsix -Destination C:\coder\coder.vsix
 ```
 
 Or simply open the release page in a browser and save the `win32-x64` asset to
@@ -159,12 +180,17 @@ Or simply open the release page in a browser and save the `win32-x64` asset to
 ### 3.2 Verify it
 
 ```powershell
-$Expected = "39a6ee07eb7aef5814ef48efc008ef1dfdc212528e842628a2002f76edc4728a"
-$Actual = (Get-FileHash "C:\coder\coder.vsix" -Algorithm SHA256).Hash.ToLower()
-"expected $Expected"
-"actual   $Actual"
-if ($Actual -eq $Expected) { "OK - safe to install" } else { "MISMATCH - do not install" }
+(Get-FileHash C:\coder\coder.vsix -Algorithm SHA256).Hash
 ```
+
+Compare what it prints, ignoring case, against:
+
+```
+39A6EE07EB7AEF5814EF48EFC008EF1DFDC212528E842628A2002F76EDC4728A
+```
+
+They must match exactly. If they differ, delete the file and download it again
+over a different route — do not install it.
 
 A file of a few kilobytes is a proxy block page saved under a `.vsix` name.
 Retrying the same route fetches the same page — change routes instead.
@@ -172,8 +198,8 @@ Retrying the same route fetches the same page — change routes instead.
 ### 3.3 Install it
 
 ```powershell
-code --install-extension "C:\coder\coder.vsix" --force
-code --list-extensions | Select-String "local"
+code --install-extension C:\coder\coder.vsix --force
+code --list-extensions | Select-String local
 ```
 
 No CLI? Use the UI: **Extensions** → `…` menu → **Install from VSIX…** → pick
@@ -217,13 +243,17 @@ Three notes worth reading:
 ### Check the mirror before starting a 17 GiB download
 
 ```powershell
-(Invoke-WebRequest -Uri "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/muse-glimmer-30B-kquant-17gb.gguf" -Method Head -UseBasicParsing).Headers["Content-Length"]
-(Invoke-WebRequest -Uri "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/dflash-kquant.gguf" -Method Head -UseBasicParsing).Headers["Content-Length"]
+(iwr https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/muse-glimmer-30B-kquant-17gb.gguf -Method Head -UseBasicParsing).Headers
 ```
 
-Expect exactly `16756681056` and `1631205312`. A timeout, or a redirect to a
-login page, means the mirror is unreachable from here and no setting will fix
-that.
+```powershell
+(iwr https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/dflash-kquant.gguf -Method Head -UseBasicParsing).Headers
+```
+
+Each prints a table of headers. Find `Content-Length`; it must read exactly
+`16756681056` for the model and `1631205312` for the drafter. A timeout, or a
+redirect to a login page, means the mirror is unreachable from here and no
+setting will fix that.
 
 ---
 
@@ -295,9 +325,9 @@ The true limit is printed only by the loader. To read it, get the repository and
 run the smoke test.
 
 ```powershell
-Invoke-WebRequest -Uri "https://codeload.github.com/Arjun10g/restricted-local-coder/zip/refs/heads/main" -OutFile "C:\coder\repo.zip"
-Expand-Archive -Path "C:\coder\repo.zip" -DestinationPath "C:\coder" -Force
-Set-Location "C:\coder\restricted-local-coder-main"
+iwr https://codeload.github.com/Arjun10g/restricted-local-coder/zip/refs/heads/main -OutFile C:\coder\repo.zip
+Expand-Archive -Path C:\coder\repo.zip -DestinationPath C:\coder -Force
+Set-Location C:\coder\restricted-local-coder-main
 ```
 
 Locate the installed runtime — the folder name includes the version and
@@ -413,6 +443,8 @@ still needs your own tests and review.
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| `The string is missing the terminator: "` | Curly quotes from copying rendered text, or a truncated paste | Press `Ctrl+C`, then use the quote-free commands in [Section 2](#2-the-fast-path--one-command) |
+| Stuck at a `>>` prompt | PowerShell is waiting for an unclosed quote or brace | Press `Ctrl+C` and retype the line |
 | `code is not recognized` | CLI not on PATH | `$env:PATH += ";$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin"`, or use the Extensions UI |
 | `cannot find parameter name LO` | `curl` is an alias for `Invoke-WebRequest` | Use the commands in [3.1](#31-download-the-extension) |
 | Downloaded file is a few KB | Proxy block page saved as `.vsix` | Change route — see [3.1](#31-download-the-extension) |
@@ -474,7 +506,7 @@ fail to download.
 ```powershell
 code --uninstall-extension restricted-local.restricted-local-coder
 Remove-Item -Recurse -Force "$env:LOCALAPPDATA\RestrictedLocalCoder" -ErrorAction SilentlyContinue
-Remove-Item -Recurse -Force "C:\coder" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force C:\coder -ErrorAction SilentlyContinue
 ```
 
 That removes the extension, the downloaded weights, and the working directory.
