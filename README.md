@@ -38,7 +38,7 @@ Only the Muse Glimmer weights and drafter are published to the configured mirror
 - Private streamed chat in the Activity Bar.
 - Explain, review, refactor, debug, test-generation, and custom selection commands.
 - Optional fill-in-the-middle inline suggestions, for profiles that declare FIM support.
-- GPU offload and speculative decoding, both opt-out, both degrading to plain CPU decoding when the hardware or the drafter is absent.
+- GPU offload (opt-out) and speculative decoding (opt-in), both degrading to plain CPU decoding when the hardware or a compatible drafter is absent. A launch that offers a drafter and fails is retried without it, so an incompatible drafter cannot stop the model loading.
 - Conversation history budgeted against the model's context window, and optional per-workspace transcript persistence (off by default).
 - Optional project memory in `.localcoder/memory.md`, treated as untrusted workspace data.
 - Optional agent mode — read, list, search, and approved command execution — disabled by default, with argv-prefix permissions, no shell, a bounded step count, and an audit log. See [docs/AGENT_MODE.md](docs/AGENT_MODE.md).
@@ -118,7 +118,7 @@ The source repository intentionally contains neither model weights nor compiled 
 
 ### 2. Produce the platform VSIX
 
-Run **Actions → Build platform VSIX → Run workflow**, or push a release tag such as `v0.3.1`. The workflow:
+Run **Actions → Build platform VSIX → Run workflow**, or push a release tag such as `v0.3.2`. The workflow:
 
 1. validates the source and tests;
 2. checks out the full commit in `vendor/llama.cpp.lock.json`;
@@ -133,7 +133,7 @@ For the intended laptop, download the `restricted-local-coder-win32-x64` workflo
 Use **Extensions → … → Install from VSIX…**, or:
 
 ```powershell
-code --install-extension .\restricted-local-coder-0.3.1-win32-x64.vsix --force
+code --install-extension .\restricted-local-coder-0.3.2-win32-x64.vsix --force
 ```
 
 ### 4. Deliver the model

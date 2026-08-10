@@ -49,7 +49,10 @@
         "downloadUrls": [
           "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/dflash-kquant.gguf"
         ],
-        "optional": true
+        "optional": true,
+        "architecture": "dflash",
+        "known_incompatible": true,
+        "note": "Different architecture (dflash) from the model it drafts for. llama.cpp refuses to create the context it needs, which fails the entire launch, so speculative decoding is off by default and the runtime retries without it if a launch fails."
       },
       "gpu": {
         "minVramGiB": 8,
@@ -98,7 +101,10 @@
         "downloadUrls": [
           "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/dflash-kquant.gguf"
         ],
-        "optional": true
+        "optional": true,
+        "architecture": "dflash",
+        "known_incompatible": true,
+        "note": "Different architecture (dflash) from the model it drafts for. llama.cpp refuses to create the context it needs, which fails the entire launch, so speculative decoding is off by default and the runtime retries without it if a launch fails."
       },
       "gpu": {
         "minVramGiB": 12,

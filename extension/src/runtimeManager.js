@@ -35,6 +35,8 @@ class RuntimeManager {
     this.startPromise = null;
     this.stopping = false;
     this.recentOutput = [];
+    this.lastArgumentsUsedDraft = false;
+    this.draftDisabledForSession = false;
     this.stateEmitter = new vscode.EventEmitter();
     this.onDidChangeState = this.stateEmitter.event;
   }
@@ -109,11 +111,16 @@ class RuntimeManager {
       args.push('--n-gpu-layers', offload);
     }
 
+    // Records whether this launch offered a drafter, so a failed start can be
+    // retried without one instead of surfacing as a broken model.
+    this.lastArgumentsUsedDraft = false;
+
     const draft = profile.draftModel;
-    if (draft && config.get('runtime.enableDraftModel', true)) {
+    if (draft && config.get('runtime.enableDraftModel', false) && !this.draftDisabledForSession) {
       const draftFile = path.join(path.dirname(modelFile), draft.fileName);
       // The drafter is optional, so a missing file must not stop the server.
       if (fs.existsSync(draftFile)) {
+        this.lastArgumentsUsedDraft = true;
         args.push('--model-draft', draftFile);
         args.push('--spec-draft-n-max', String(clampInteger(config.get('runtime.draftMaxTokens', 16), 1, 64, 16)));
         // A drafter left on the CPU while the main model is on the GPU is
@@ -194,10 +201,38 @@ class RuntimeManager {
     }
   }
 
+  /**
+   * Start, and if a run that offered a draft model fails, start again without
+   * it.
+   *
+   * Speculative decoding is a throughput optimization and must never be able to
+   * stop the model loading. A drafter can be rejected for reasons that are not
+   * knowable in advance -- the shipped one is a different architecture from the
+   * model it drafts for, and llama.cpp refuses the context it needs -- and the
+   * symptom is a wall of errors that reads as though the weights are broken.
+   */
+  async startWithDraftFallback() {
+    try {
+      return await this.startInternal();
+    } catch (error) {
+      if (!this.lastArgumentsUsedDraft || this.draftDisabledForSession) throw error;
+      this.draftDisabledForSession = true;
+      this.output.appendLine(
+        '[runtime] The run that included the draft model failed. Retrying without speculative decoding.'
+      );
+      this.output.appendLine(`[runtime] The failure was: ${safeErrorMessage(error)}`);
+      const client = await this.startInternal();
+      vscode.window.showWarningMessage(
+        'The draft model could not be loaded, so speculative decoding is off for this session. Generation is otherwise normal. Set localCoder.runtime.enableDraftModel to false to stop trying.'
+      );
+      return client;
+    }
+  }
+
   async start() {
     if (this.state === 'ready' && this.client) return this.client;
     if (this.startPromise) return this.startPromise;
-    this.startPromise = this.startInternal()
+    this.startPromise = this.startWithDraftFallback()
       .catch(async (error) => {
         const child = this.process;
         if (child && child.exitCode === null) {

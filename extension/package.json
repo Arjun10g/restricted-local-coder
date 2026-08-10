@@ -2,7 +2,7 @@
   "name": "restricted-local-coder",
   "displayName": "Restricted Local Coder",
   "description": "Self-contained local coding assistant with a bundled llama.cpp runtime and no cloud inference.",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": "restricted-local",
   "license": "MIT",
   "engines": {
@@ -317,8 +317,8 @@
         },
         "localCoder.runtime.enableDraftModel": {
           "type": "boolean",
-          "default": true,
-          "description": "Use the profile's draft model for speculative decoding when it is installed. Profiles that declare no drafter, and installations where the drafter file is absent, ignore this setting."
+          "default": false,
+          "description": "Use the profile's draft model for speculative decoding when it is installed. Off by default: the drafter published for Muse Glimmer is a different architecture (dflash) from the model it drafts for, and llama.cpp refuses to create the context it needs, which fails the whole launch. If a run that offers a drafter fails, the runtime retries without it automatically."
         },
         "localCoder.runtime.draftMaxTokens": {
           "type": "integer",

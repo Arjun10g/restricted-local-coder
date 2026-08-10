@@ -25,6 +25,9 @@ function managerWith(settings) {
   return manager;
 }
 
+// Speculative decoding is opt-in, so tests that exercise it must ask for it.
+const DRAFT_ON = { 'runtime.enableDraftModel': true };
+
 const PROFILE = {
   id: 'test-profile',
   shortName: 'Test',
@@ -59,7 +62,7 @@ test('an installed drafter is passed with the flag names the pinned tag accepts'
   const modelFile = path.join(directory, 'model.gguf');
   fs.writeFileSync(path.join(directory, 'drafter.gguf'), 'stub');
 
-  const args = managerWith({}).accelerationArguments(modelFile, PROFILE);
+  const args = managerWith(DRAFT_ON).accelerationArguments(modelFile, PROFILE);
   assert.ok(args.includes('--model-draft'));
   assert.equal(args[args.indexOf('--model-draft') + 1], path.join(directory, 'drafter.gguf'));
   assert.equal(args[args.indexOf('--spec-draft-n-max') + 1], '16');
@@ -74,7 +77,7 @@ test('turning the GPU off also keeps the drafter off the GPU', (t) => {
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   fs.writeFileSync(path.join(directory, 'drafter.gguf'), 'stub');
 
-  const args = managerWith({ 'runtime.gpuLayers': 'off' }).accelerationArguments(
+  const args = managerWith({ ...DRAFT_ON, 'runtime.gpuLayers': 'off' }).accelerationArguments(
     path.join(directory, 'model.gguf'),
     PROFILE
   );
@@ -101,9 +104,9 @@ test('draftMaxTokens is clamped into the range the setting declares', (t) => {
   fs.writeFileSync(path.join(directory, 'drafter.gguf'), 'stub');
   const modelFile = path.join(directory, 'model.gguf');
 
-  const high = managerWith({ 'runtime.draftMaxTokens': 500 }).accelerationArguments(modelFile, PROFILE);
+  const high = managerWith({ ...DRAFT_ON, 'runtime.draftMaxTokens': 500 }).accelerationArguments(modelFile, PROFILE);
   assert.equal(high[high.indexOf('--spec-draft-n-max') + 1], '64');
-  const low = managerWith({ 'runtime.draftMaxTokens': 0 }).accelerationArguments(modelFile, PROFILE);
+  const low = managerWith({ ...DRAFT_ON, 'runtime.draftMaxTokens': 0 }).accelerationArguments(modelFile, PROFILE);
   assert.equal(low[low.indexOf('--spec-draft-n-max') + 1], '1');
 });
 
@@ -150,4 +153,48 @@ test('a CPU-only build with a GPU present is called out rather than reported as 
   assert.match(result.detail, /CPU-only build/);
   // With no device at all, the CPU-only build is not the interesting fact.
   assert.match(gpuRow(profile, null, 'auto', []).detail, /No NVIDIA device/);
+});
+
+test('speculative decoding is opt-in, since a bad pairing fails the whole launch', () => {
+  // The drafter published for the default profile is a different architecture
+  // (dflash) from the model it drafts for, and llama.cpp refuses the context it
+  // needs. Defaulting this on made a working model look broken.
+  const declared = require('../package.json').contributes.configuration.properties;
+  assert.equal(declared['localCoder.runtime.enableDraftModel'].default, false);
+});
+
+test('a launch that offered a drafter is retried without one', async () => {
+  const manager = Object.create(RuntimeManager.prototype);
+  const logged = [];
+  manager.output = { appendLine: (line) => logged.push(line) };
+  manager.lastArgumentsUsedDraft = true;
+  manager.draftDisabledForSession = false;
+
+  let attempts = 0;
+  manager.startInternal = async () => {
+    attempts += 1;
+    if (attempts === 1) throw new Error('failed to create llama_context');
+    return 'client';
+  };
+
+  assert.equal(await manager.startWithDraftFallback(), 'client');
+  assert.equal(attempts, 2, 'must retry exactly once');
+  assert.equal(manager.draftDisabledForSession, true);
+  assert.ok(logged.some((line) => /Retrying without speculative decoding/.test(line)));
+});
+
+test('a failure with no drafter involved is reported, not retried forever', async () => {
+  const manager = Object.create(RuntimeManager.prototype);
+  manager.output = { appendLine() {} };
+  manager.lastArgumentsUsedDraft = false;
+  manager.draftDisabledForSession = false;
+
+  let attempts = 0;
+  manager.startInternal = async () => {
+    attempts += 1;
+    throw new Error('the model file is corrupt');
+  };
+
+  await assert.rejects(() => manager.startWithDraftFallback(), /corrupt/);
+  assert.equal(attempts, 1, 'a genuine failure must surface immediately');
 });
