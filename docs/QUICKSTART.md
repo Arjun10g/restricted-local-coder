@@ -57,9 +57,14 @@ cd restricted-local-coder
 git log --oneline -1
 ```
 
-> While the parted-model work is still on a branch, clone it explicitly with
-> `--branch parted-model-delivery`. Drop the flag once that branch is merged;
-> `main` before the merge cannot build a VSIX on any platform.
+If the machine already has an older checkout, update it rather than cloning
+again:
+
+```bash
+git checkout main
+git pull origin main
+npm run validate
+```
 
 ---
 
