@@ -77,6 +77,10 @@ See `docs/ARCHITECTURE.md` and `docs/THREAT_MODEL.md` for the detailed flows and
 > To publish the weights without a large transfer touching a laptop, see
 > **[docs/STAGE_MODEL_GCS.md](docs/STAGE_MODEL_GCS.md)** — a disposable VM stages
 > the model into an object store, which needs no split and no new VSIX.
+>
+> Once the weights are published, **[docs/RUN_ON_WORKSTATION.md](docs/RUN_ON_WORKSTATION.md)**
+> is the end-to-end copy-and-paste path on the target machine: install, settings,
+> acquire the model, start, and verify.
 
 ### 1. Put this tree in GitHub
 
