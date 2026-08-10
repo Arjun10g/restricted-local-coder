@@ -69,6 +69,10 @@ See `docs/ARCHITECTURE.md` and `docs/THREAT_MODEL.md` for the detailed flows and
 > chat? Use **[docs/QUICKSTART.md](docs/QUICKSTART.md)** — prerequisites, clone,
 > verify, obtain or build a VSIX, install, configure, run. For the locked-down
 > target workstation, use **[docs/WORKSTATION_SETUP.md](docs/WORKSTATION_SETUP.md)**.
+>
+> On Windows behind a proxy, **[docs/INSTALL_WINDOWS.md](docs/INSTALL_WINDOWS.md)**
+> is copy-and-paste only: seven independent download routes, verification,
+> install, and an error reference.
 
 ### 1. Put this tree in GitHub
 
