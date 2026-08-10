@@ -47,6 +47,29 @@ function requiredSystemLibraries(platform = process.platform) {
   return platform === 'win32' ? [...WINDOWS_RUNTIME_LIBRARIES] : [];
 }
 
+// llama.cpp is built with GGML_BACKEND_DL, so each compute backend is a separate
+// loadable library beside the server. A CPU-only build has none of these, and on
+// such a build --n-gpu-layers is accepted and silently does nothing — which
+// looks identical to a broken GPU unless it is reported.
+const GPU_BACKEND_PATTERN = /ggml-(cuda|hip|vulkan|metal|sycl|opencl)/i;
+
+/**
+ * Names the GPU backends a runtime directory can actually load. An empty array
+ * means the build is CPU-only, whatever the machine's hardware is.
+ */
+async function gpuBackends(runtimeDirectory) {
+  try {
+    const entries = await fsp.readdir(runtimeDirectory);
+    return entries
+      .filter((entry) => GPU_BACKEND_PATTERN.test(entry))
+      .map((entry) => entry.match(GPU_BACKEND_PATTERN)[1].toLowerCase())
+      .filter((backend, index, all) => all.indexOf(backend) === index)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
 async function directoryContains(directory, fileName) {
   try {
     const target = fileName.toLowerCase();
@@ -164,6 +187,7 @@ module.exports = {
   acceleratedRuntimeKeys,
   defaultModelDirectory,
   getRuntimeKey,
+  gpuBackends,
   isRunnableFile,
   missingSystemLibraries,
   modelPath,

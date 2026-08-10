@@ -136,6 +136,12 @@ back to ModelScope, which this machine cannot reach.
 nothing and runs on the CPU. Set it to `"off"` only if a partial offload turns
 out to be slower than pure CPU, which does happen on small VRAM.
 
+> **The `win32-x64` VSIX bundles the CPU-only llama.cpp build.** On Windows the
+> offload flag is currently accepted and ignored, so `gpuLayers` changes nothing
+> even on a machine with a large GPU. Preflight detects this and says so rather
+> than reporting a GPU it cannot use. Delivering the CUDA runtime is tracked
+> separately; until then, treat Windows performance as CPU performance.
+
 Leave `inlineCompletions.enabled` at `false`. Muse Glimmer has no
 fill-in-the-middle tokens, so the extension refuses inline requests for this
 profile regardless — turning it on has no effect. Inline completion needs one of

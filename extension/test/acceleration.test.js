@@ -131,11 +131,23 @@ test('the FIM prompt defaults to the Qwen spelling and honours a profile overrid
 
 test('the GPU preflight row reports absence as guidance rather than failure', () => {
   const profile = { gpu: { minVramGiB: 8, fullOffloadVramGiB: 20 } };
-  assert.equal(gpuRow(profile, null, 'auto').status, 'WARN');
-  assert.equal(gpuRow(profile, null, 'off').status, 'PASS');
-  assert.equal(gpuRow(profile, [24], 'auto').status, 'PASS');
-  assert.equal(gpuRow(profile, [12], 'auto').status, 'WARN');
-  assert.equal(gpuRow(profile, [4], 'auto').status, 'WARN');
+  const cuda = ['cuda'];
+  assert.equal(gpuRow(profile, null, 'auto', cuda).status, 'WARN');
+  assert.equal(gpuRow(profile, null, 'off', cuda).status, 'PASS');
+  assert.equal(gpuRow(profile, [24], 'auto', cuda).status, 'PASS');
+  assert.equal(gpuRow(profile, [12], 'auto', cuda).status, 'WARN');
+  assert.equal(gpuRow(profile, [4], 'auto', cuda).status, 'WARN');
   // A profile that declares no requirement must not be judged against one.
-  assert.equal(gpuRow({}, [8], 'auto').status, 'PASS');
+  assert.equal(gpuRow({}, [8], 'auto', cuda).status, 'PASS');
+});
+
+test('a CPU-only build with a GPU present is called out rather than reported as ready', () => {
+  const profile = { gpu: { minVramGiB: 8, fullOffloadVramGiB: 20 } };
+  // Ample VRAM must not read as PASS when the runtime cannot use it, which is
+  // the current state of the win32-x64 CPU build.
+  const result = gpuRow(profile, [24], 'auto', []);
+  assert.equal(result.status, 'WARN');
+  assert.match(result.detail, /CPU-only build/);
+  // With no device at all, the CPU-only build is not the interesting fact.
+  assert.match(gpuRow(profile, null, 'auto', []).detail, /No NVIDIA device/);
 });

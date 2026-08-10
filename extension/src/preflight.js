@@ -6,7 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { promisify } = require('node:util');
 const vscode = require('vscode');
-const { getRuntimeKey, missingSystemLibraries, resolveRuntimeBinary } = require('./paths');
+const { getRuntimeKey, gpuBackends, missingSystemLibraries, resolveRuntimeBinary } = require('./paths');
 const { formatBytes, safeErrorMessage } = require('./util');
 const { runtimeEnvironment } = require('./runtimePolicy');
 
@@ -61,11 +61,24 @@ async function detectVramGiB() {
   }
 }
 
-function gpuRow(profile, devices, requested) {
+function gpuRow(profile, devices, requested, backends = []) {
   if (requested === 'off') {
     return row('PASS', 'GPU offload', 'Disabled by localCoder.runtime.gpuLayers; generation stays on the CPU.');
   }
   const requirement = profile.gpu;
+
+  // Hardware and a build that can drive it are separate questions. A CPU-only
+  // llama.cpp accepts --n-gpu-layers and ignores it, so a machine with a large
+  // GPU would otherwise report PASS and still run at CPU speed.
+  if (devices && backends.length === 0) {
+    return row(
+      'WARN',
+      'GPU offload',
+      `${devices.length} NVIDIA device(s) present, but the installed runtime is a CPU-only build with no GPU backend library. llama-server accepts the offload flag and ignores it, so generation runs on the CPU at full CPU cost.`,
+      'Install the accelerated runtime for this platform. Until then, this is a speed limit, not a failure.'
+    );
+  }
+
   if (!devices) {
     return row(
       'WARN',
@@ -77,7 +90,7 @@ function gpuRow(profile, devices, requested) {
     );
   }
   const largest = Math.max(...devices);
-  const summary = `${devices.length} device(s); largest has ${largest.toFixed(1)} GiB VRAM.`;
+  const summary = `${devices.length} device(s); largest has ${largest.toFixed(1)} GiB VRAM. Runtime backends: ${backends.join(', ')}.`;
   if (!requirement) {
     return row('PASS', 'GPU offload', `${summary} Layers are offloaded automatically.`);
   }
@@ -195,7 +208,14 @@ async function runPreflight(context, modelRegistry) {
     }
   }
 
-  rows.push(gpuRow(profile, await detectVramGiB(), config.get('runtime.gpuLayers', 'auto')));
+  rows.push(
+    gpuRow(
+      profile,
+      await detectVramGiB(),
+      config.get('runtime.gpuLayers', 'auto'),
+      runtimeBinary ? await gpuBackends(path.dirname(runtimeBinary)) : []
+    )
+  );
 
   if (profile.draftModel) {
     if (!config.get('runtime.enableDraftModel', true)) {
