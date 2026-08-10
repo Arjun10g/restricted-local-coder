@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verifiedOn": "2026-08-07",
+  "verifiedOn": "2026-08-10",
   "defaultProfile": "qwen3-coder-30b-a3b-iq2m",
   "prohibitedHosts": [
     "huggingface.co",
@@ -20,10 +20,10 @@
       "format": "GGUF",
       "license": "Apache-2.0",
       "fileName": "Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf",
-      "approximateSizeGiB": 10.9,
-      "expectedBytes": null,
+      "approximateSizeGiB": 10.1,
+      "expectedBytes": 10848017760,
       "acceptedSha256": [
-        "0a860d0a6876b4c2f8b903aef62eeb020f34c83ae64a1d8e65687c9af0c1d1f5"
+        "0823c953beeda2db652da5839b94fbe08a75725d67bfcd093ca39ba8c1b47d41"
       ],
       "modelScopeModel": "unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF",
       "downloadUrls": [
@@ -57,10 +57,9 @@
       "format": "GGUF",
       "license": "Apache-2.0",
       "fileName": "Qwen3-Coder-30B-A3B-Instruct-1M-UD-TQ1_0.gguf",
-      "approximateSizeGiB": 8.1,
-      "expectedBytes": null,
+      "approximateSizeGiB": 7.52,
+      "expectedBytes": 8072846688,
       "acceptedSha256": [
-        "33d7669a67e1dfdc43136e97757910a2c8a9821f66e71b0bc3cad53d5eb9f6b1",
         "f2d8e2c93e3b729df4eb27ee97f803ce95c8e498a7535f0da814aa413ddcda65"
       ],
       "modelScopeModel": "unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF",
@@ -95,10 +94,10 @@
       "format": "GGUF",
       "license": "Apache-2.0",
       "fileName": "Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q4_K_XL.gguf",
-      "approximateSizeGiB": 17.7,
-      "expectedBytes": null,
+      "approximateSizeGiB": 16.48,
+      "expectedBytes": 17690500448,
       "acceptedSha256": [
-        "ae28b2a995e1b3c505650bf4c81062090eaec53b7c552b6c5f387924e374d4a0"
+        "e71c9271166ad64865767022e86f45ea4f03a8258389460cc55c8d95e18833db"
       ],
       "modelScopeModel": "unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF",
       "downloadUrls": [
@@ -132,8 +131,8 @@
       "format": "GGUF",
       "license": "Apache-2.0",
       "fileName": "Qwen3-Coder-Next-UD-TQ1_0.gguf",
-      "approximateSizeGiB": 18.9,
-      "expectedBytes": null,
+      "approximateSizeGiB": 17.64,
+      "expectedBytes": 18941835296,
       "acceptedSha256": [
         "352049921f1dc861bf33fd03f5d2c25a08f248ee808179fe63ce16307357551c"
       ],

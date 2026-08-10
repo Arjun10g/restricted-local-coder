@@ -55,7 +55,7 @@ for tool in python3 curl gcloud; do
   command -v "$tool" >/dev/null 2>&1 || { echo "Required tool not found: $tool" >&2; exit 1; }
 done
 
-read -r PROFILE_ID FILE_NAME EXPECTED_SHA SIZE_GIB DOWNLOAD_URL <<EOF
+read -r PROFILE_ID FILE_NAME EXPECTED_SHA SIZE_GIB EXPECTED_BYTES DOWNLOAD_URL <<EOF
 $(python3 - "$MANIFEST" "${PROFILE_ID}" <<'PY'
 import json, sys
 manifest = json.load(open(sys.argv[1]))
@@ -67,7 +67,7 @@ urls = profile.get("downloadUrls") or []
 if not urls:
     sys.exit("Profile has no download URL: %s" % wanted)
 print(profile["id"], profile["fileName"], profile["acceptedSha256"][0],
-      profile["approximateSizeGiB"], urls[0])
+      profile["approximateSizeGiB"], profile.get("expectedBytes") or 0, urls[0])
 PY
 )
 EOF
@@ -95,8 +95,26 @@ if [ "$AVAIL_KB" -lt "$NEEDED_KB" ]; then
 fi
 
 echo
-echo "==> Downloading (resumable)"
-curl -fL --retry 5 --retry-delay 5 -C - -o "$MODEL" "$DOWNLOAD_URL"
+CURRENT_BYTES=0
+[ -f "$MODEL" ] && CURRENT_BYTES="$(stat -c %s "$MODEL" 2>/dev/null || stat -f %z "$MODEL")"
+
+# Resuming a file that is already complete makes the server answer 416, which
+# curl treats as an error. Skip the transfer instead, and let the digest check
+# below decide whether the existing copy is usable.
+if [ "$EXPECTED_BYTES" -gt 0 ] && [ "$CURRENT_BYTES" -eq "$EXPECTED_BYTES" ]; then
+  echo "==> Already downloaded ($CURRENT_BYTES bytes); skipping transfer"
+else
+  echo "==> Downloading (resumable)"
+  curl -fL --retry 5 --retry-delay 5 -C - -o "$MODEL" "$DOWNLOAD_URL"
+  if [ "$EXPECTED_BYTES" -gt 0 ]; then
+    GOT="$(stat -c %s "$MODEL" 2>/dev/null || stat -f %z "$MODEL")"
+    if [ "$GOT" -ne "$EXPECTED_BYTES" ]; then
+      echo "Download is $GOT bytes but the manifest expects $EXPECTED_BYTES." >&2
+      echo "Re-run to resume; the transfer continues from where it stopped." >&2
+      exit 1
+    fi
+  fi
+fi
 
 echo
 echo "==> Verifying SHA-256 before anything is published"
