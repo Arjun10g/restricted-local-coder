@@ -44,7 +44,8 @@
     "onCommand:localCoder.replaceSelectionWithLastResponse",
     "onCommand:localCoder.cancelGeneration",
     "onCommand:localCoder.showLogs",
-    "onCommand:localCoder.editProjectMemory"
+    "onCommand:localCoder.editProjectMemory",
+    "onCommand:localCoder.showAgentAudit"
   ],
   "capabilities": {
     "untrustedWorkspaces": {
@@ -148,6 +149,11 @@
         "command": "localCoder.editProjectMemory",
         "title": "Local Coder: Edit Project Memory",
         "icon": "$(note)"
+      },
+      {
+        "command": "localCoder.showAgentAudit",
+        "title": "Local Coder: Show Agent Audit Log",
+        "icon": "$(list-flat)"
       }
     ],
     "viewsContainers": {
@@ -422,7 +428,7 @@
         "localCoder.chat.persistHistory": {
           "type": "boolean",
           "default": false,
-          "description": "Store this workspace's chat transcript so it survives restarting VS Code. Off by default: a transcript on disk outlives the session and can contain quoted source. It is written to the extension's private storage directory, never into the workspace, and “Clear conversation” deletes it."
+          "description": "Store this workspace's chat transcript so it survives restarting VS Code. Off by default: a transcript on disk outlives the session and can contain quoted source. It is written to the extension's private storage directory, never into the workspace, and \u201cClear conversation\u201d deletes it."
         },
         "localCoder.chat.maxHistoryTurns": {
           "type": "integer",

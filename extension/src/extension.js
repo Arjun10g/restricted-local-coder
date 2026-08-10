@@ -118,6 +118,18 @@ async function activate(context) {
   register(context, 'localCoder.showLogs', () => output.show(true), output);
   register(
     context,
+    'localCoder.showAgentAudit',
+    async () => {
+      const document = await vscode.workspace.openTextDocument({
+        language: 'markdown',
+        content: `# Local Coder — agent audit\n\n${chat.audit.summary()}\n`,
+      });
+      await vscode.window.showTextDocument(document, { preview: true });
+    },
+    output
+  );
+  register(
+    context,
     'localCoder.editProjectMemory',
     async () => {
       const folder = vscode.workspace.workspaceFolders?.[0];

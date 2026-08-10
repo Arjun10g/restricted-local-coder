@@ -6,6 +6,9 @@ const { isAbortError, safeErrorMessage } = require('./util');
 const { isSensitivePath } = require('./contextRules');
 const { ConversationStore } = require('./conversationStore');
 const { availableHistoryTokens, selectHistory } = require('./historyBudget');
+const { AuditLog } = require('./agent/auditLog');
+const { runAgentLoop } = require('./agent/agentLoop');
+const { normalizeMode } = require('./agent/permissions');
 
 function nonce() {
   return crypto.randomBytes(18).toString('base64url');
@@ -30,6 +33,7 @@ class ChatViewProvider {
     this.activeController = null;
     this.store = new ConversationStore(context.globalStorageUri?.fsPath ?? context.globalStoragePath, outputChannel);
     this.restored = false;
+    this.audit = new AuditLog(outputChannel);
     this.runtimeSubscription = this.runtime.onDidChangeState((state) => this.postStatus(state));
   }
 
@@ -217,6 +221,46 @@ class ChatViewProvider {
     return selectHistory(this.history, budget, maxTurns);
   }
 
+  /**
+   * Runs one agent turn. Confirmation is asked of the user through a modal, so
+   * a command in confirm mode cannot proceed on a webview message alone.
+   */
+  async runAgentTurn({ client, messages, profile, requestId, mode, signal }) {
+    const config = vscode.workspace.getConfiguration('localCoder');
+    const workspacePath = this.workspacePath();
+    if (!workspacePath) {
+      throw new Error('Agent mode needs an open workspace folder. Open one, or set localCoder.agent.mode to "off".');
+    }
+    const outcome = await runAgentLoop({
+      client,
+      messages,
+      profile,
+      workspacePath,
+      mode,
+      rules: config.get('agent.allowedCommands', []),
+      maxSteps: config.get('agent.maxSteps', 8),
+      audit: this.audit.recorder(),
+      signal,
+      confirm: async ({ argv }) => {
+        const answer = await vscode.window.showWarningMessage(
+          `Local Coder wants to run: ${argv.join(' ')}`,
+          { modal: true, detail: `Working directory: ${workspacePath}` },
+          'Run once'
+        );
+        return answer === 'Run once';
+      },
+      onEvent: (event) => {
+        if (event.type === 'toolStart') {
+          this.post({ type: 'assistantToken', id: requestId, token: `\n\n[tool] ${event.name}…\n` });
+        } else if (event.type === 'toolEnd' && !event.ok) {
+          this.post({ type: 'assistantToken', id: requestId, token: `${event.content}\n` });
+        }
+      },
+    });
+    this.post({ type: 'assistantToken', id: requestId, token: `\n${outcome.text}` });
+    return { text: outcome.text, usage: null };
+  }
+
   async ask(prompt, options = {}) {
     if (this.activeController) {
       throw new Error('A generation is already running. Cancel it before sending another request.');
@@ -240,15 +284,24 @@ class ChatViewProvider {
         ...this.boundedHistory({ systemText: context.system, userText: context.user }),
         { role: 'user', content: context.user },
       ];
-      const result = await client.chatStream({
-        messages,
-        profile: this.models.getSelectedProfile(),
-        signal: controller.signal,
-        onToken: (token) => {
-          assistant += token;
-          this.post({ type: 'assistantToken', id: requestId, token });
-        },
-      });
+      const profile = this.models.getSelectedProfile();
+      const agentMode = normalizeMode(vscode.workspace.getConfiguration('localCoder').get('agent.mode', 'off'));
+      let result;
+      if (agentMode === 'off') {
+        result = await client.chatStream({
+          messages,
+          profile,
+          signal: controller.signal,
+          onToken: (token) => {
+            assistant += token;
+            this.post({ type: 'assistantToken', id: requestId, token });
+          },
+        });
+      } else {
+        // Tool turns are not streamed: a tool call is only actionable once
+        // complete, so progress is reported per step instead of per token.
+        result = await this.runAgentTurn({ client, messages, profile, requestId, mode: agentMode, signal: controller.signal });
+      }
       assistant = result.text;
       this.lastResponse = assistant;
       this.history.push(

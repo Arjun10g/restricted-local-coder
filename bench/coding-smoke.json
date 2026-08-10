@@ -10,7 +10,9 @@
       "values\\[mid\\]\\s*<\\s*target[\\s\\S]{0,120}lo\\s*=\\s*mid\\s*\\+\\s*1",
       "return\\s+-1"
     ],
-    "mustNotMatch": ["```"]
+    "mustNotMatch": [
+      "```"
+    ]
   },
   {
     "id": "typescript-safe-cache-read",
@@ -23,7 +25,10 @@
       "expiresAt",
       "return\\s+undefined"
     ],
-    "mustNotMatch": ["throw\\s+new", "```"]
+    "mustNotMatch": [
+      "throw\\s+new",
+      "```"
+    ]
   },
   {
     "id": "javascript-bounded-retry",
@@ -36,7 +41,10 @@
       "await\\s+operation\\s*\\(",
       "throw"
     ],
-    "mustNotMatch": ["while\\s*\\(\\s*true\\s*\\)", "```"]
+    "mustNotMatch": [
+      "while\\s*\\(\\s*true\\s*\\)",
+      "```"
+    ]
   },
   {
     "id": "sql-parameterized-query",
@@ -48,7 +56,11 @@
       "(\\$1|\\?)",
       "(query|prepare|execute|all|get|run)"
     ],
-    "mustNotMatch": ["\\$\\{\\s*email\\s*\\}", "\\+\\s*email", "```"]
+    "mustNotMatch": [
+      "\\$\\{\\s*email\\s*\\}",
+      "\\+\\s*email",
+      "```"
+    ]
   },
   {
     "id": "python-pytest-boundaries",
@@ -61,7 +73,10 @@
       "clamp\\s*\\(",
       "assert"
     ],
-    "mustNotMatch": ["unittest\\.TestCase", "```"]
+    "mustNotMatch": [
+      "unittest\\.TestCase",
+      "```"
+    ]
   },
   {
     "id": "go-context-cancellation",
@@ -75,6 +90,25 @@
       "<-\\s*ctx\\.Done\\s*\\(\\s*\\)",
       "ctx\\.Err\\s*\\(\\s*\\)"
     ],
-    "mustNotMatch": ["time\\.Sleep", "```"]
+    "mustNotMatch": [
+      "time\\.Sleep",
+      "```"
+    ]
+  },
+  {
+    "id": "tool-call-argv-shape",
+    "language": "json",
+    "category": "tool-use",
+    "prompt": "You may call a tool named run_command that takes {\"command\": [...]} where the array holds argv items. There is no shell. Emit only the JSON arguments object needed to run the project's npm test suite. No prose, no Markdown fences.",
+    "mustMatch": [
+      "\\\"command\\\"\\s*:\\s*\\[",
+      "\\\"npm\\\"\\s*,\\s*\\\"test\\\""
+    ],
+    "mustNotMatch": [
+      "npm test\\\"",
+      "&&",
+      ";\\s*rm",
+      "sh\\s+-c"
+    ]
   }
 ]

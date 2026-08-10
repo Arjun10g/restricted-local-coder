@@ -185,6 +185,7 @@ The included benchmark performs static checks and never executes generated code.
 ## Repository map
 
 - `extension/` — dependency-free VS Code extension source and model allow-list.
+- `extension/src/agent/` — opt-in tool use: argv-prefix permissions, shell-free execution, a bounded loop, and an audit log. See [docs/AGENT_MODE.md](docs/AGENT_MODE.md).
 - `bench/` — small deterministic coding screen.
 - `scripts/` — build, acquisition, install, preflight, smoke, benchmark, and offline staging.
 - `tools/` — source-policy, manifest, pinned-checkout, and runtime-collection helpers.
