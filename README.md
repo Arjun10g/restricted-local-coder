@@ -16,14 +16,20 @@ The repository builds a platform-specific VSIX that embeds a pinned `llama.cpp` 
 
 ## Default model decision
 
-The initial default is **Qwen3-Coder-30B-A3B-Instruct, UD-IQ2_M GGUF**: a code-specialized sparse MoE in an approximately 10.9 GB aggressive 2-bit file. It is selected because the exact artifact has an approved digest, fits with useful RAM headroom, works through `llama.cpp`, and supports the Qwen fill-in-the-middle path used by the extension.
+The default is **Muse Glimmer 30B, kquant GGUF**: an agentic chat model in a 15.61 GiB 4-bit file, with an optional 1.52 GiB drafter for speculative decoding. It is selected because the exact artifact has an approved digest, fits a 32 GB machine with room for the KV cache and the editor, and is the profile whose weights are actually staged.
 
-| Approved profile | Approx. file | Purpose | Position on 32 GB |
+It has **no fill-in-the-middle tokens**, so inline completion is unavailable for it and the extension refuses those requests rather than sending Qwen control tokens to a model that never saw them. Inline completion needs one of the Qwen profiles.
+
+| Approved profile | Approx. file | FIM | Position on 32 GB |
 |---|---:|---|---|
-| Qwen3-Coder 30B-A3B UD-IQ2_M | 10.9 GB | 2-bit balance | **Recommended default** |
-| Qwen3-Coder 30B-A3B UD-TQ1_0 | 8.1 GB | Ternary / 1-bit-class | Experimental; benchmark first |
-| Qwen3-Coder 30B-A3B UD-Q4_K_XL | 17.7 GB | Same-family quality control | Start at 8K context |
-| Qwen3-Coder-Next UD-TQ1_0 | 18.9 GB | 80B-total hybrid experiment | Little safety margin |
+| Muse Glimmer 30B kquant | 15.6 GiB | no | **Recommended default; weights staged** |
+| Muse Glimmer 30B kquant dynamic | 18.3 GiB | no | Quality comparison; less headroom |
+| Qwen3-Coder 30B-A3B UD-IQ2_M | 10.1 GiB | yes | 2-bit balance; needs staging |
+| Qwen3-Coder 30B-A3B UD-TQ1_0 | 7.5 GiB | yes | Ternary; benchmark first |
+| Qwen3-Coder 30B-A3B UD-Q4_K_XL | 16.5 GiB | yes | Quality control; start at 8K |
+| Qwen3-Coder-Next UD-TQ1_0 | 17.6 GiB | yes | 80B-total experiment; little margin |
+
+Only the Muse Glimmer weights and drafter are published to the configured mirror. Selecting a Qwen profile means staging its weights first.
 
 `docs/MODEL_SELECTION.md` also reviews 2026 alternatives including Qwen3.6-35B-A3B, GLM-4.7-Flash, Devstral Small 2, Mistral Small 4, and BitNet. They are not silently added to the allow-list: each needs a stable GGUF, approved SHA-256, llama.cpp validation, memory measurement, chat/FIM checks, and local coding evaluation.
 
@@ -31,7 +37,11 @@ The initial default is **Qwen3-Coder-30B-A3B-Instruct, UD-IQ2_M GGUF**: a code-s
 
 - Private streamed chat in the Activity Bar.
 - Explain, review, refactor, debug, test-generation, and custom selection commands.
-- Optional Qwen fill-in-the-middle inline suggestions.
+- Optional fill-in-the-middle inline suggestions, for profiles that declare FIM support.
+- GPU offload and speculative decoding, both opt-out, both degrading to plain CPU decoding when the hardware or the drafter is absent.
+- Conversation history budgeted against the model's context window, and optional per-workspace transcript persistence (off by default).
+- Optional project memory in `.localcoder/memory.md`, treated as untrusted workspace data.
+- Optional agent mode — read, list, search, and approved command execution — disabled by default, with argv-prefix permissions, no shell, a bounded step count, and an audit log. See [docs/AGENT_MODE.md](docs/AGENT_MODE.md).
 - Bounded active-file, diagnostics, open-file, and lexical workspace context.
 - Active secret-file rejection and exclusions for credential directories, keys, models, dependencies, and generated output.
 - Content-safe untrusted-context wrappers and adaptive code fences that file text cannot close directly.
@@ -39,7 +49,7 @@ The initial default is **Qwen3-Coder-30B-A3B-Instruct, UD-IQ2_M GGUF**: a code-s
 - Hugging Face deny-list, redirect revalidation, and public cleartext-HTTP rejection.
 - Mandatory GGUF magic and approved SHA-256 verification, with safe validation caching.
 - Pinned native runtime build and platform-specific VSIX packaging in GitHub Actions.
-- Loopback-only server, random SecretStorage bearer key, no Web UI, no agent/tools/MCP, no slots endpoint, one inference slot, and offline runtime mode.
+- Loopback-only server, random SecretStorage bearer key, no Web UI, no slots endpoint, one inference slot, and offline runtime mode. The server's own agent, tool, and MCP surfaces stay disabled (`--no-agent`); tool use, when enabled, is mediated entirely by the extension so that permission is decided in one auditable place rather than inside the inference server.
 - Preflight, native smoke test, offline bundle, and coding-model comparison scripts.
 - No third-party npm runtime dependencies.
 
@@ -51,12 +61,16 @@ VS Code desktop
    ├─ Chat + explicit editor commands
    ├─ Optional FIM inline provider
    ├─ Secret-aware bounded context builder
+   ├─ Optional agent tools (off by default)
+   │  ├─ argv-prefix permissions, no shell
+   │  ├─ workspace-confined paths, secret deny-list
+   │  └─ bounded step count + audit log
    ├─ Verified downloader/importer
    └─ Runtime supervisor
       └─ bundled llama-server
          ├─ 127.0.0.1 only
          ├─ bearer key from child environment
-         ├─ Web UI / agent / tools / MCP disabled
+         ├─ Web UI / server-side agent / MCP disabled
          ├─ bounded context, cache, and concurrency
          └─ approved local GGUF
 ```
@@ -98,7 +112,7 @@ The source repository intentionally contains neither model weights nor compiled 
 
 ### 2. Produce the platform VSIX
 
-Run **Actions → Build platform VSIX → Run workflow**, or push a release tag such as `v0.2.0`. The workflow:
+Run **Actions → Build platform VSIX → Run workflow**, or push a release tag such as `v0.3.0`. The workflow:
 
 1. validates the source and tests;
 2. checks out the full commit in `vendor/llama.cpp.lock.json`;
@@ -113,7 +127,7 @@ For the intended laptop, download the `restricted-local-coder-win32-x64` workflo
 Use **Extensions → … → Install from VSIX…**, or:
 
 ```powershell
-code --install-extension .\restricted-local-coder-0.2.0-win32-x64.vsix --force
+code --install-extension .\restricted-local-coder-0.3.0-win32-x64.vsix --force
 ```
 
 ### 4. Deliver the model

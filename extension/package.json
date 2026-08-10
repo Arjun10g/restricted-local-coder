@@ -2,7 +2,7 @@
   "name": "restricted-local-coder",
   "displayName": "Restricted Local Coder",
   "description": "Self-contained local coding assistant with a bundled llama.cpp runtime and no cloud inference.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "restricted-local",
   "license": "MIT",
   "engines": {

@@ -37,8 +37,8 @@ Runs entirely on GitHub runners. Costs nothing on your laptop.
 Once the `parts` block from Stage B is committed:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 The `Build platform VSIX` workflow compiles the pinned `llama.cpp` for four
@@ -46,8 +46,8 @@ targets, packages each into a platform VSIX with a SHA-256 sidecar, and attaches
 them to a GitHub release. The workstation needs only:
 
 ```
-restricted-local-coder-0.2.0-win32-x64.vsix
-restricted-local-coder-0.2.0-win32-x64.vsix.sha256
+restricted-local-coder-0.3.0-win32-x64.vsix
+restricted-local-coder-0.3.0-win32-x64.vsix.sha256
 ```
 
 To rehearse the build without publishing anything, run the workflow manually
@@ -143,14 +143,14 @@ wastes the whole download.
 Copy the `.vsix` and its `.sha256` across, then confirm the file is intact:
 
 ```powershell
-(Get-FileHash .\restricted-local-coder-0.2.0-win32-x64.vsix -Algorithm SHA256).Hash.ToLower()
-Get-Content .\restricted-local-coder-0.2.0-win32-x64.vsix.sha256
+(Get-FileHash .\restricted-local-coder-0.3.0-win32-x64.vsix -Algorithm SHA256).Hash.ToLower()
+Get-Content .\restricted-local-coder-0.3.0-win32-x64.vsix.sha256
 ```
 
 Install it:
 
 ```powershell
-code --install-extension .\restricted-local-coder-0.2.0-win32-x64.vsix
+code --install-extension .\restricted-local-coder-0.3.0-win32-x64.vsix
 ```
 
 Or in VS Code: Extensions → `…` menu → **Install from VSIX**.
