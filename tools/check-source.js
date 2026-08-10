@@ -30,6 +30,11 @@ for (const required of [
   "'--no-slots'",
   "'--no-cors-credentials'",
   "'--no-cache-idle-slots'",
+  // Speculative decoding must load a drafter the manifest declared, and the
+  // pinned tag removed --draft-max in favour of the spec-draft spelling.
+  "'--model-draft'",
+  "'--spec-draft-n-max'",
+  "'--n-gpu-layers'",
 ]) {
   assert.ok(runtime.includes(required), `Runtime hardening is missing ${required}`);
 }

@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('node:fs');
 const childProcess = require('node:child_process');
 const path = require('node:path');
 const vscode = require('vscode');
@@ -67,6 +68,44 @@ class RuntimeManager {
     return value;
   }
 
+  /**
+   * GPU offload and speculative decoding, both opt-out and both degrading to a
+   * plain CPU run when the hardware or the drafter is absent.
+   *
+   * Flag names are those of the pinned tag: `--draft-max` and `--draft-min` were
+   * removed upstream in favour of `--spec-draft-n-max` and `--spec-draft-n-min`,
+   * so the older spellings are silently rejected.
+   */
+  accelerationArguments(modelFile, profile) {
+    const config = this.config();
+    const args = [];
+
+    const requested = config.get('runtime.gpuLayers', 'auto');
+    if (requested !== 'off') {
+      // "auto" lets llama.cpp place as many layers as the device holds, which is
+      // the right default when VRAM is unknown; a number pins it explicitly.
+      const layers = requested === 'auto' ? '-1' : String(clampInteger(requested, 0, 999, 0));
+      args.push('--n-gpu-layers', layers);
+    }
+
+    const draft = profile.draftModel;
+    if (draft && config.get('runtime.enableDraftModel', true)) {
+      const draftFile = path.join(path.dirname(modelFile), draft.fileName);
+      // The drafter is optional, so a missing file must not stop the server.
+      if (fs.existsSync(draftFile)) {
+        args.push('--model-draft', draftFile);
+        args.push('--spec-draft-n-max', String(clampInteger(config.get('runtime.draftMaxTokens', 16), 1, 64, 16)));
+        if (requested !== 'off') {
+          args.push('--n-gpu-layers-draft', '-1');
+        }
+      } else {
+        this.output.appendLine(`[runtime] Draft model ${draft.fileName} is not installed; speculative decoding is off`);
+      }
+    }
+
+    return args;
+  }
+
   buildArguments({ modelFile, profile, port, threads }) {
     const config = this.config();
     const contextOverride = config.get('runtime.contextSize', 0);
@@ -105,6 +144,7 @@ class RuntimeManager {
       'mmap',
       '--flash-attn',
       'auto',
+      ...this.accelerationArguments(modelFile, profile),
       '--jinja',
       '--no-webui',
       '--no-agent',
