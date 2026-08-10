@@ -65,6 +65,11 @@ See `docs/ARCHITECTURE.md` and `docs/THREAT_MODEL.md` for the detailed flows and
 
 ## Build and deploy
 
+> Cloning an existing checkout onto another machine and getting to a running
+> chat? Use **[docs/QUICKSTART.md](docs/QUICKSTART.md)** — prerequisites, clone,
+> verify, obtain or build a VSIX, install, configure, run. For the locked-down
+> target workstation, use **[docs/WORKSTATION_SETUP.md](docs/WORKSTATION_SETUP.md)**.
+
 ### 1. Put this tree in GitHub
 
 Create an empty repository, extract or copy this source tree, then run:
@@ -161,7 +166,7 @@ The included benchmark performs static checks and never executes generated code.
 - `tools/` — source-policy, manifest, pinned-checkout, and runtime-collection helpers.
 - `.github/workflows/` — source CI and platform VSIX build/release with full-commit action pins.
 - `vendor/llama.cpp.lock.json` — exact native runtime source pin.
-- `docs/` — design, security, deployment, model decision, performance, validation, and source record.
+- `docs/` — quickstart, workstation setup, design, security, deployment, model decision, performance, validation, and source record.
 
 ## Source-only validation
 
