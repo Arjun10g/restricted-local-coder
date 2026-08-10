@@ -17,6 +17,8 @@ Thumbs.db
 *.part-[0-9][0-9][0-9]
 extension/runtime/**/llama-server
 extension/runtime/**/llama-server.exe
+# Fetched from the pinned release alongside the binaries, never committed
+extension/runtime/**/LLAMA_CPP_LICENSE.txt
 extension/runtime/**/*.dll
 extension/runtime/**/*.so
 extension/runtime/**/*.dylib

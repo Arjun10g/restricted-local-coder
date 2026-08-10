@@ -27,6 +27,17 @@ function runtimeFileName(platform = process.platform) {
   return platform === 'win32' ? 'llama-server.exe' : 'llama-server';
 }
 
+// Accelerated runtimes are keyed off the base platform and searched ahead of it.
+// They are delivered out of band rather than in the VSIX: the Windows CUDA build
+// unpacks to roughly a gigabyte, most of it ggml-cuda.dll and cublasLt.
+const ACCELERATED_RUNTIME_KEYS = {
+  'win32-x64': ['win32-x64-cuda'],
+};
+
+function acceleratedRuntimeKeys(key = getRuntimeKey()) {
+  return ACCELERATED_RUNTIME_KEYS[key] ?? [];
+}
+
 // The MSVC C/C++ runtime is not part of Windows itself, unlike the Universal
 // CRT. A locked-down workstation may not have it and cannot install it without
 // administrator rights, so the VSIX carries these beside llama-server.exe.
@@ -120,6 +131,12 @@ async function resolveRuntimeBinary(extensionPath, configuredPath) {
   }
 
   const key = getRuntimeKey();
+  // A GPU runtime is far too large to ship inside a VSIX, so it is fetched
+  // separately into its own directory. Prefer it when present and fall back to
+  // the CPU build, which means a machine without it still works.
+  for (const accelerated of acceleratedRuntimeKeys(key)) {
+    candidates.push(path.join(extensionPath, 'runtime', accelerated, name));
+  }
   candidates.push(path.join(extensionPath, 'runtime', key, name));
 
   for (const candidate of candidates) {
@@ -142,7 +159,9 @@ function modelPath(modelDirectory, profile) {
 }
 
 module.exports = {
+  ACCELERATED_RUNTIME_KEYS,
   WINDOWS_RUNTIME_LIBRARIES,
+  acceleratedRuntimeKeys,
   defaultModelDirectory,
   getRuntimeKey,
   isRunnableFile,

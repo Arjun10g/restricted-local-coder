@@ -7,6 +7,7 @@ const path = require('node:path');
 const test = require('node:test');
 const {
   WINDOWS_RUNTIME_LIBRARIES,
+  acceleratedRuntimeKeys,
   missingSystemLibraries,
   requiredSystemLibraries,
 } = require('../src/paths');
@@ -21,6 +22,15 @@ async function write(directory, ...names) {
     await fsp.writeFile(path.join(directory, name), 'stub');
   }
 }
+
+test('an accelerated runtime is offered only where one exists', () => {
+  // Windows gets a CUDA build; nothing else does, and the base key must never
+  // list itself or the CPU fallback would be skipped.
+  assert.deepEqual(acceleratedRuntimeKeys('win32-x64'), ['win32-x64-cuda']);
+  assert.deepEqual(acceleratedRuntimeKeys('darwin-arm64'), []);
+  assert.deepEqual(acceleratedRuntimeKeys('linux-x64'), []);
+  assert.ok(!acceleratedRuntimeKeys('win32-x64').includes('win32-x64'));
+});
 
 test('only Windows declares required C/C++ runtime libraries', () => {
   assert.deepEqual(requiredSystemLibraries('win32'), WINDOWS_RUNTIME_LIBRARIES);

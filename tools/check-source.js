@@ -73,6 +73,29 @@ for (const file of executableSource) {
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'vendor', 'llama.cpp.lock.json'), 'utf8'));
 assert.equal(lock.repository, 'https://github.com/ggml-org/llama.cpp.git');
 assert.match(lock.commit, /^[a-f0-9]{40}$/, 'llama.cpp lock must use a full immutable commit');
+assert.equal(lock.schemaVersion, 2, 'llama.cpp lock must use schema 2');
+assert.match(lock.tag, /^b\d+$/, 'llama.cpp lock must pin a release tag such as b10344');
+assert.ok(lock.assets && typeof lock.assets === 'object', 'llama.cpp lock must record release assets');
+
+// Runtime binaries were historically shipped unhashed. Every asset now carries
+// its digest and length, and neither may be omitted for any platform.
+const runtimeKeys = Object.keys(lock.assets);
+assert.ok(runtimeKeys.length > 0, 'llama.cpp lock records no runtime assets');
+for (const key of runtimeKeys) {
+  const entry = lock.assets[key];
+  assert.ok(['vsix', 'external'].includes(entry.delivery), `${key} must declare delivery vsix or external`);
+  assert.ok(Array.isArray(entry.files) && entry.files.length > 0, `${key} lists no asset files`);
+  for (const file of entry.files) {
+    assert.ok(file.name && path.basename(file.name) === file.name, `${key} has an unsafe asset file name`);
+    assert.match(file.sha256, /^[a-f0-9]{64}$/, `${key}/${file.name} needs a SHA-256`);
+    assert.ok(Number.isSafeInteger(file.sizeBytes) && file.sizeBytes > 0, `${key}/${file.name} needs a byte length`);
+    // Upstream names the per-build archives after the tag, but ships the CUDA
+    // runtime pack unversioned, so only the tagged ones can be checked by name.
+    if (file.name.startsWith('llama-')) {
+      assert.ok(file.name.includes(lock.tag), `${key}/${file.name} is not from the pinned tag ${lock.tag}`);
+    }
+  }
+}
 
 const benchmarkTasks = JSON.parse(fs.readFileSync(path.join(root, 'bench', 'coding-smoke.json'), 'utf8'));
 assert.ok(Array.isArray(benchmarkTasks) && benchmarkTasks.length >= 5, 'Coding benchmark needs at least five tasks');

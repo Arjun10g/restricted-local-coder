@@ -1,9 +1,68 @@
 {
+  "schemaVersion": 2,
   "repository": "https://github.com/ggml-org/llama.cpp.git",
-  "tag": "b10307",
-  "commit": "fc3f10b3895ebb0ddfe1fcb7fd5950f2c1719339",
-  "verifiedOn": "2026-08-07",
+  "tag": "b10344",
+  "commit": "7a20b417f4526cae073bd997af5020cea3e7ccbe",
+  "verifiedOn": "2026-08-10",
   "license": "MIT",
-  "buildTarget": "llama-server",
-  "notes": "Pinned to llama.cpp release b10307 verified on 2026-08-07. Update only after model, security, and extension smoke tests."
+  "sourceBuildTarget": "llama-server",
+  "notes": "Pinned to llama.cpp release b10344, the first tag carrying Muse Glimmer support (PR #26841, merged 2026-08-10). Official prebuilt release assets are repackaged rather than compiled; every asset is recorded with its SHA-256 and byte length, which the source-build flow never provided. Update only after model, security, and extension smoke tests. Windows archives are flat; macOS and Linux archives nest their payload under llama-<tag>/ and are the only ones carrying LICENSE.",
+  "assets": {
+    "win32-x64": {
+      "delivery": "vsix",
+      "files": [
+        {
+          "name": "llama-b10344-bin-win-cpu-x64.zip",
+          "sha256": "c0cec8825843957cae6620f927eb6eb9f7f4680da3206910932ea9075f91b405",
+          "sizeBytes": 18406491
+        }
+      ]
+    },
+    "win32-x64-cuda": {
+      "delivery": "external",
+      "notes": "Roughly 1.1 GB unpacked, dominated by ggml-cuda.dll and cublasLt64_12.dll, so it cannot ship inside a VSIX. Fetched on demand and verified against these digests, the same way model weights are.",
+      "files": [
+        {
+          "name": "llama-b10344-bin-win-cuda-12.4-x64.zip",
+          "sha256": "56a2c34e2cbd9dc396ea9d85ba9e6cfd8d276299cb833d2370c0d01d4a617cc2",
+          "sizeBytes": 250690042
+        },
+        {
+          "name": "cudart-llama-bin-win-cuda-12.4-x64.zip",
+          "sha256": "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6",
+          "sizeBytes": 391443627
+        }
+      ]
+    },
+    "darwin-arm64": {
+      "delivery": "vsix",
+      "files": [
+        {
+          "name": "llama-b10344-bin-macos-arm64.tar.gz",
+          "sha256": "24bf4348ddc6d1d9b465105ed8ae371e326c576623ac612fbff73532181c8f13",
+          "sizeBytes": 11024576
+        }
+      ]
+    },
+    "linux-x64": {
+      "delivery": "vsix",
+      "files": [
+        {
+          "name": "llama-b10344-bin-ubuntu-x64.tar.gz",
+          "sha256": "01b90b0764821d0e53b985730eea3837e29a976ee00e783e18837937b93fc3f1",
+          "sizeBytes": 16512385
+        }
+      ]
+    },
+    "linux-arm64": {
+      "delivery": "vsix",
+      "files": [
+        {
+          "name": "llama-b10344-bin-ubuntu-arm64.tar.gz",
+          "sha256": "d04da2488689820c855fe47f89d20023ed4059073478d65d47b9f07a52e1a8df",
+          "sizeBytes": 13388576
+        }
+      ]
+    }
+  }
 }
