@@ -334,8 +334,51 @@ Most first-run failures are environmental rather than defects in the build.
 | `'code' is not recognized` | VS Code CLI not on `PATH` | Install from the VSIX UI, or add VS Code's `bin` to `PATH` |
 | `is not compatible with VS Code <version>` | VS Code older than 1.95.0 | Update VS Code |
 | `Unable to install extension ... platform` | Wrong runtime key for the machine | Download the asset matching the OS and CPU |
+| `Invoke-WebRequest : Not Found` when `$base` was set in another window | PowerShell variables do not survive a new terminal | Paste the whole URL on one line |
+| Release asset download fails but the repository zip works | The two use different hosts | See below |
 | `ENOENT ... package.json` (`errno -4058`) | Wrong working directory | See below |
 | `The requested URL returned error: 400` on clone | Proxy or TLS inspector | See below |
+
+### Release downloads fail while the repository zip works
+
+They are not served by the same host, so a proxy can permit one and block the
+other:
+
+| Download | Redirects to |
+|---|---|
+| `…/archive/refs/heads/main.zip` | `codeload.github.com` |
+| `…/releases/download/<tag>/<asset>` | `release-assets.githubusercontent.com` |
+
+Determine which problem you have before changing commands. Any HTTP response,
+even 400 or 403, means the host is reachable and the command is at fault. A
+timeout, a refused connection, or a block page means the host itself is denied
+and no command will fix it:
+
+```powershell
+Invoke-WebRequest -Uri "https://release-assets.githubusercontent.com" -Method Head
+```
+
+If the command is at fault, remove every moving part and put the whole URL on a
+single line. Shell variables are a common culprit, because `$base` set in one
+window does not exist in another, and the request then goes to a truncated URL
+that returns 404:
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/<owner>/restricted-local-coder/releases/download/<tag>/<asset>.vsix" -OutFile "coder.vsix"
+```
+
+If the host is denied, a browser is the next thing to try, since it uses the
+system proxy configuration and any stored credentials that PowerShell lacks.
+Open the releases page and click the asset.
+
+Failing that, ask for the file through whatever channel already works. Anything
+reachable serves: an internal artifact repository, a file share, or a branch of
+this repository containing the VSIX, which arrives over `codeload.github.com`
+like the zip does. Verify the SHA-256 afterwards regardless of route.
+
+> Release asset URLs redirect to a **signed, time-limited** address that expires
+> about an hour after it is issued. Always start from the `github.com/…` link
+> rather than reusing a redirect URL copied from a browser's network tools.
 
 ### VS Code CLI not on `PATH`
 
