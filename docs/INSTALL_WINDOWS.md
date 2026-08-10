@@ -13,22 +13,27 @@ Values used throughout:
 | Size | `8200334` bytes |
 | SHA-256 | `01a2f57a355dd55eeaf54e276ffd2f0c0e60722ee0469db88f050122ba4e3cc6` |
 
-Work in a short path. Deep paths under `Downloads` cause avoidable failures.
-
-```powershell
-mkdir C:\coder -Force; cd C:\coder
-```
+Everything below writes to `C:\coder\coder.vsix`. A short path avoids the
+truncated extractions and path-length failures that deep folders under
+`Downloads` produce.
 
 ---
 
 ## Part 1 — Download the VSIX
 
 Try the routes in order. Stop at the first that produces a file of `8200334`
-bytes. Each is independent; nothing carries over between them.
+bytes.
+
+Each block is genuinely self-contained: it creates the folder itself, so the
+blocks can be run in any order and none depends on an earlier step.
+`Invoke-WebRequest` does **not** create a missing destination folder — it fails
+with *"could not find a part of the path"* — which is why every block below
+begins by creating it.
 
 ### Route 1 — one line, no variables
 
 ```powershell
+New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
 Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/runtime-preview-0.1.0/restricted-local-coder-0.1.0-win32-x64.vsix" -OutFile "C:\coder\coder.vsix"
 ```
 
@@ -39,12 +44,14 @@ passes your Windows logon to the proxy, which is what PowerShell otherwise fails
 to do.
 
 ```powershell
+New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
 Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/runtime-preview-0.1.0/restricted-local-coder-0.1.0-win32-x64.vsix" -OutFile "C:\coder\coder.vsix" -ProxyUseDefaultCredentials -UseBasicParsing
 ```
 
 If your proxy address is not auto-detected, name it explicitly:
 
 ```powershell
+New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
 Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/runtime-preview-0.1.0/restricted-local-coder-0.1.0-win32-x64.vsix" -OutFile "C:\coder\coder.vsix" -Proxy "http://proxy.yourorg.com:8080" -ProxyUseDefaultCredentials -UseBasicParsing
 ```
 
@@ -54,6 +61,7 @@ Uses a different HTTP stack from `Invoke-WebRequest`, and often succeeds where
 it fails.
 
 ```powershell
+New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
 $w = New-Object System.Net.WebClient
 $w.Proxy = [System.Net.WebRequest]::GetSystemWebProxy()
 $w.Proxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials
@@ -66,6 +74,7 @@ BITS is the Windows Update transfer service. It honours WinHTTP proxy settings
 and machine policy, so it often works when everything else is blocked.
 
 ```powershell
+New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
 Start-BitsTransfer -Source "https://github.com/Arjun10g/restricted-local-coder/releases/download/runtime-preview-0.1.0/restricted-local-coder-0.1.0-win32-x64.vsix" -Destination "C:\coder\coder.vsix"
 ```
 
@@ -73,15 +82,17 @@ Start-BitsTransfer -Source "https://github.com/Arjun10g/restricted-local-coder/r
 
 The `.exe` matters. Without it PowerShell resolves `curl` to
 `Invoke-WebRequest`, which rejects curl's flags with *"cannot find parameter
-name LO"*.
+name LO"*. Unlike `Invoke-WebRequest`, curl creates no directories either.
 
 ```powershell
+New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
 curl.exe -L --output "C:\coder\coder.vsix" "https://github.com/Arjun10g/restricted-local-coder/releases/download/runtime-preview-0.1.0/restricted-local-coder-0.1.0-win32-x64.vsix"
 ```
 
 With proxy authentication:
 
 ```powershell
+New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
 curl.exe -L --proxy-ntlm --proxy-user : --output "C:\coder\coder.vsix" "https://github.com/Arjun10g/restricted-local-coder/releases/download/runtime-preview-0.1.0/restricted-local-coder-0.1.0-win32-x64.vsix"
 ```
 
@@ -97,6 +108,7 @@ https://github.com/Arjun10g/restricted-local-coder/releases/tag/runtime-preview-
 Download `restricted-local-coder-0.1.0-win32-x64.vsix`, then move it into place:
 
 ```powershell
+New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
 Move-Item "$env:USERPROFILE\Downloads\restricted-local-coder-0.1.0-win32-x64.vsix" "C:\coder\coder.vsix" -Force
 ```
 
@@ -108,6 +120,7 @@ deny the other. If a repository zip downloads but release assets do not, take
 the VSIX from a branch archive so it travels the path that already works:
 
 ```powershell
+New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
 Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/archive/refs/heads/vsix-drop.zip" -OutFile "C:\coder\vsix-drop.zip" -UseBasicParsing
 Expand-Archive -Path "C:\coder\vsix-drop.zip" -DestinationPath "C:\coder\drop" -Force
 Copy-Item "C:\coder\drop\restricted-local-coder-vsix-drop\dist\restricted-local-coder-0.1.0-win32-x64.vsix" "C:\coder\coder.vsix" -Force
@@ -243,6 +256,7 @@ $ProgressPreference = 'SilentlyContinue'
 
 | Message | Cause | Do this |
 |---|---|---|
+| `Could not find a part of the path 'C:\coder\coder.vsix'` | Destination folder missing, or mistyped — read the path in the message back carefully, `C:\ccoder` is not `C:\coder` | Rerun the whole route block; each one creates the folder first |
 | `cannot find parameter name LO` | `curl` is an alias for `Invoke-WebRequest` | Route 1, or Route 5 spelled `curl.exe` |
 | `Invoke-WebRequest : Not Found` | Placeholder left in the URL, or a `$` variable set in another window | Route 1 — one line, no variables |
 | `(404) Not Found` | Wrong tag or asset name | Copy from the releases page |
