@@ -440,6 +440,41 @@ still needs your own tests and review.
 
 ## 11. Troubleshooting
 
+### If something fails, run this first
+
+It collects everything needed to diagnose a failure in one pass, and writes a
+report you can paste. It only reads — nothing is installed, changed, or sent
+anywhere.
+
+```powershell
+iwr https://raw.githubusercontent.com/Arjun10g/restricted-local-coder/main/scripts/Get-Diagnostics.ps1 -OutFile C:\coder\diag.ps1
+```
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\coder\diag.ps1
+```
+
+It reports which versions are installed, what is in the runtime directory,
+whether each required library resolves, whether files are blocked as
+downloaded-from-the-internet, and — most usefully — the **real exit code** from
+running `llama-server.exe` directly, with the common Windows status codes named:
+
+| Exit code | Meaning |
+|---|---|
+| `0` | started normally |
+| `0xC0000135` | a dependent DLL is missing |
+| `0xC0000142` | a DLL failed to initialise |
+| `0xC000001D` | the CPU lacks a required instruction |
+| a startup denial | policy is blocking execution, not a broken file |
+
+It also reports AppLocker and Device Guard status, because a managed workstation
+can refuse to run **any** executable under `.vscode\extensions` no matter what
+the package contains. That is not something a different build can fix; it needs
+an IT exception for the extensions directory.
+
+A copy is written to `%TEMP%\localcoder-diagnostics.txt`.
+
+
+
 | Symptom | Cause | Fix |
 |---|---|---|
 | `The string is missing the terminator: "` | Curly quotes from copying rendered text, or a truncated paste | Press `Ctrl+C`, then use the quote-free commands in [Section 2](#2-the-fast-path--one-command) |
@@ -448,7 +483,7 @@ still needs your own tests and review.
 | `cannot find parameter name LO` | `curl` is an alias for `Invoke-WebRequest` | Use the commands in [3.1](#31-download-the-extension) |
 | Downloaded file is a few KB | Proxy block page saved as `.vsix` | Change route — see [3.1](#31-download-the-extension) |
 | Digest mismatch on the VSIX | Corrupt or intercepted download | Delete it and retry over a different route |
-| Preflight: Native runtime FAIL | Wrong-platform VSIX, or a missing dependency | Install the `win32-x64` asset from **v0.3.1 or later**; v0.3.0 shipped without `libomp140.x86_64.dll` and could not start at all |
+| Preflight: Native runtime FAIL | Old version still loaded, a missing dependency, or execution policy | Run the diagnostics above. v0.3.1 is verified to start on a clean Windows machine, so the usual causes are VS Code still running an older install (**restart it**) or policy blocking `.vscode\extensions` |
 | Preflight: System libraries FAIL naming `libomp140.x86_64.dll` | Runtime built before v0.3.1 | Install v0.3.1 or later |
 | Preflight: System libraries FAIL | MSVC runtime missing | This VSIX bundles it; reinstall and recheck the digest |
 | Preflight: Workspace trust FAIL | Folder not trusted | Trust it and reload |
