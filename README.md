@@ -73,6 +73,10 @@ See `docs/ARCHITECTURE.md` and `docs/THREAT_MODEL.md` for the detailed flows and
 > On Windows behind a proxy, **[docs/INSTALL_WINDOWS.md](docs/INSTALL_WINDOWS.md)**
 > is copy-and-paste only: seven independent download routes, verification,
 > install, and an error reference.
+>
+> To publish the weights without a large transfer touching a laptop, see
+> **[docs/STAGE_MODEL_GCS.md](docs/STAGE_MODEL_GCS.md)** — a disposable VM stages
+> the model into an object store, which needs no split and no new VSIX.
 
 ### 1. Put this tree in GitHub
 
