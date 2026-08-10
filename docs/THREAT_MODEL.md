@@ -28,7 +28,9 @@
 | Prompt or source is written to native logs | prompt/verbose/log-file flags blocked; no slots endpoint |
 | Cleartext or prohibited model download | HTTPS required except loopback; deny-list reapplied after redirects |
 | Partial/tampered weights are loaded | `.part` staging, GGUF magic, mandatory approved SHA-256, cache invalidation on file change |
-| Runtime source silently changes | full immutable Git commit and release workflow |
+| Runtime source silently changes | pinned release tag plus the full immutable Git commit; every release asset recorded with its SHA-256 and byte length in `vendor/llama.cpp.lock.json`, verified before the archive is unpacked |
+| Runtime binary is altered in transit or at rest | binaries are hashed. Until the move to prebuilt releases only the VSIX carried a digest, so the most security-sensitive artifact was the least verified |
+| Prebuilt runtime carries an unwanted Web UI | official archives bundle Web UI assets; the server is always started with `--no-webui`, so the mitigation is at runtime rather than at build time |
 | Prompt injection closes context wrapper | reserved-tag neutralization, adaptive code fences, and explicit untrusted-data instruction |
 | Secret file enters context | path/extension deny-list plus active-document rejection and bounded retrieval |
 | Malicious environment changes child behavior | strip `LLAMA_*`, `GGML_*`, HF and inherited loader variables; use only the bundled runtime directory for adjacent native libraries |
