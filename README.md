@@ -79,6 +79,12 @@ See `docs/ARCHITECTURE.md` and `docs/THREAT_MODEL.md` for the detailed flows and
 
 ## Build and deploy
 
+> **Setting up a workstation from scratch? Start with
+> [docs/START_HERE.md](docs/START_HERE.md).** It is the whole path in one page:
+> one scripted command, or every manual step, plus settings, model acquisition,
+> verification, troubleshooting, and the reference digests. The pages below cover
+> narrower jobs.
+>
 > Cloning an existing checkout onto another machine and getting to a running
 > chat? Use **[docs/QUICKSTART.md](docs/QUICKSTART.md)** — prerequisites, clone,
 > verify, obtain or build a VSIX, install, configure, run. For the locked-down
@@ -205,7 +211,7 @@ The included benchmark performs static checks and never executes generated code.
 - `tools/` — source-policy, manifest, pinned-checkout, and runtime-collection helpers.
 - `.github/workflows/` — source CI and platform VSIX build/release with full-commit action pins.
 - `vendor/llama.cpp.lock.json` — exact native runtime source pin.
-- `docs/` — quickstart, workstation setup, design, security, deployment, model decision, performance, validation, and source record.
+- `docs/` — START_HERE (from scratch), quickstart, workstation setup, design, security, deployment, model decision, performance, validation, and source record.
 
 ## Source-only validation
 
