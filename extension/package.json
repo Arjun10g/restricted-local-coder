@@ -2,7 +2,7 @@
   "name": "restricted-local-coder",
   "displayName": "Restricted Local Coder",
   "description": "Self-contained local coding assistant with a bundled llama.cpp runtime and no cloud inference.",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "publisher": "restricted-local",
   "license": "MIT",
   "engines": {
@@ -352,10 +352,10 @@
         },
         "localCoder.context.maxCharacters": {
           "type": "integer",
-          "default": 48000,
+          "default": 16000,
           "minimum": 4000,
           "maximum": 250000,
-          "description": "Maximum workspace context characters sent to the local model per chat request."
+          "description": "Maximum characters of workspace context attached to a request. Measured on the default profile, prompt processing is the dominant cost and it degrades with depth: 60 tok/s at 579 tokens, 37 at 2327, and 16 at 9227, where a single turn took 9.5 minutes on a 28-core machine. 48000 characters is roughly 12000 tokens and put every turn in that range, so the default is now 16000. Raise it only if you are willing to wait; the cost is paid on every turn."
         },
         "localCoder.context.maxRetrievedFiles": {
           "type": "integer",

@@ -129,6 +129,32 @@ hurts. This machine reports one thread per core, so there were no logical cores
 to test with; the recommendation to pin to physical cores on Windows remains a
 recommendation, not something verified in this repository.
 
+## Prompt processing at realistic depth, which is the cost that actually hurts
+
+Everything above used a short prompt. This extension attaches workspace context
+to every turn, so the number that decides how the tool feels is prefill at
+depth. Default profile, `--no-repack`, one variable -- prompt length:
+
+| prompt tokens | prefill tok/s | generation tok/s | wall clock for the turn |
+|---|---|---|---|
+| 579 | 59.68 | 16.81 | 12 s |
+| 2327 | 37.23 | 11.15 | 66 s |
+| 9227 | 16.41 | 5.34 | **569 s (9.5 minutes)** |
+
+Prefill throughput falls 3.6x between a small prompt and a 9k-token one, and
+because the whole prompt must be processed before the first token appears, the
+wall-clock cost rises far faster than the token count. **On a 28-core server
+chip.** A 12-core laptop will be worse.
+
+`localCoder.context.maxCharacters` used to default to 48000 characters, roughly
+12000 tokens, which put every single turn in the bottom row of that table. It now
+defaults to **16000**. That is the difference between a tool that answers in
+under a minute and one that answers in ten.
+
+This is also why prefix reuse matters more than raw throughput for this
+workload, and why the context builder selects relevant files rather than dumping
+the repository.
+
 ## Reasoning strength, for the optional Muse Glimmer profile
 
 Muse Glimmer's chat template accepts a `reasoning_strength` argument and
@@ -186,7 +212,7 @@ The extension therefore starts conservatively:
 7. Prefer the 4-bit `Q4_K_XL` profile. Going below about 4 bits per weight buys
    file size but not proportional speed on a CPU, because dequantisation cost
    rises as the byte count falls, and it measurably costs code correctness. The
-   two "TQ1" profiles were removed in 0.4.1: their GGUF headers declared
+   two "TQ1" profiles were removed in 0.4.2: their GGUF headers declared
    `IQ1_S`, contained no ternary tensors at all, and the name was a publisher
    labelling choice rather than a format.
 

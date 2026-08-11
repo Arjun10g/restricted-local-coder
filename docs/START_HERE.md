@@ -145,7 +145,7 @@ Use this if the script fails, or if you prefer doing it yourself.
 
 ```powershell
 mkdir C:\coder -Force
-iwr https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1/restricted-local-coder-0.4.1-win32-x64.vsix -OutFile C:\coder\coder.vsix
+iwr https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.2/restricted-local-coder-0.4.2-win32-x64.vsix -OutFile C:\coder\coder.vsix
 ```
 
 > Two things that bite here, both avoided above:
@@ -160,22 +160,22 @@ Behind a proxy that needs your credentials:
 ```powershell
 $Proxy = [System.Net.WebRequest]::GetSystemWebProxy()
 $Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
-Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1/restricted-local-coder-0.4.1-win32-x64.vsix" -OutFile "C:\coder\coder.vsix" -Proxy $Proxy.GetProxy("https://github.com").AbsoluteUri -ProxyUseDefaultCredentials
+Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.2/restricted-local-coder-0.4.2-win32-x64.vsix" -OutFile "C:\coder\coder.vsix" -Proxy $Proxy.GetProxy("https://github.com").AbsoluteUri -ProxyUseDefaultCredentials
 ```
 
 Other routes, if both fail:
 
 ```powershell
 # Real curl, which ships with Windows 10+ as curl.exe
-curl.exe -L -o C:\coder\coder.vsix https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1/restricted-local-coder-0.4.1-win32-x64.vsix
+curl.exe -L -o C:\coder\coder.vsix https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.2/restricted-local-coder-0.4.2-win32-x64.vsix
 
 # Background Intelligent Transfer Service, which often works when others do not
-Start-BitsTransfer -Source https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1/restricted-local-coder-0.4.1-win32-x64.vsix -Destination C:\coder\coder.vsix
+Start-BitsTransfer -Source https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.2/restricted-local-coder-0.4.2-win32-x64.vsix -Destination C:\coder\coder.vsix
 ```
 
 Or simply open the release page in a browser and save the `win32-x64` asset to
 `C:\coder\coder.vsix`:
-<https://github.com/Arjun10g/restricted-local-coder/releases/tag/v0.4.1>
+<https://github.com/Arjun10g/restricted-local-coder/releases/tag/v0.4.2>
 
 ### 3.2 Verify it
 
@@ -186,7 +186,7 @@ Or simply open the release page in a browser and save the `win32-x64` asset to
 Compare what it prints, ignoring case, against the digest published beside the
 release asset:
 
-<https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1/restricted-local-coder-0.4.1-win32-x64.vsix.sha256>
+<https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.2/restricted-local-coder-0.4.2-win32-x64.vsix.sha256>
 
 They must match exactly. If they differ, delete the file and download it again
 over a different route — do not install it.
@@ -482,8 +482,8 @@ A copy is written to `%TEMP%\localcoder-diagnostics.txt`.
 | `cannot find parameter name LO` | `curl` is an alias for `Invoke-WebRequest` | Use the commands in [3.1](#31-download-the-extension) |
 | Downloaded file is a few KB | Proxy block page saved as `.vsix` | Change route — see [3.1](#31-download-the-extension) |
 | Digest mismatch on the VSIX | Corrupt or intercepted download | Delete it and retry over a different route |
-| Preflight: Native runtime FAIL | Old version still loaded, a missing dependency, or execution policy | Run the diagnostics above. v0.4.1 is verified to start on a clean Windows machine, so the usual causes are VS Code still running an older install (**restart it**) or policy blocking `.vscode\extensions` |
-| Preflight: System libraries FAIL naming `libomp140.x86_64.dll` | Runtime built before v0.4.1 | Install v0.4.1 or later |
+| Preflight: Native runtime FAIL | Old version still loaded, a missing dependency, or execution policy | Run the diagnostics above. v0.4.2 is verified to start on a clean Windows machine, so the usual causes are VS Code still running an older install (**restart it**) or policy blocking `.vscode\extensions` |
+| Preflight: System libraries FAIL naming `libomp140.x86_64.dll` | Runtime built before v0.4.2 | Install v0.4.2 or later |
 | Preflight: System libraries FAIL | MSVC runtime missing | This VSIX bundles it; reinstall and recheck the digest |
 | Preflight: Workspace trust FAIL | Folder not trusted | Trust it and reload |
 | Preflight: Model file WARN | Not downloaded yet | Expected before step 5 |
@@ -496,8 +496,8 @@ A copy is written to `%TEMP%\localcoder-diagnostics.txt`.
 | Inline suggestions never appear | Default profile has no FIM | Expected — see [Section 4](#4-settings) |
 | Log says `Draft model … is not installed` | Drafter absent | Harmless; speculative decoding is skipped |
 | Runtime exits immediately | Usually memory | Lower `promptCacheMiB` to 0 and close memory-heavy apps. Note that lowering `contextSize` does **not** help on the Muse Glimmer profile — measured, it reclaims about 85 MiB between 16K and 4K. See [PERFORMANCE.md](PERFORMANCE.md) |
-| `error loading model`, `unknown model architecture: 'muse-glimmer'` | The runtime predates the model. Releases before v0.4.1 pinned llama.cpp b10344, which does not know this architecture | Install v0.4.1 or later. No setting can work around it |
-| `failed to create llama_context`, `dflash requires ctx_other to be set` | The draft model is a different architecture from the model it drafts for | Harmless from v0.4.1: the server logs it and carries on. `localCoder.runtime.enableDraftModel` is off by default, and measurement showed the drafter gives no speedup |
+| `error loading model`, `unknown model architecture: 'muse-glimmer'` | The runtime predates the model. Releases before v0.4.2 pinned llama.cpp b10344, which does not know this architecture | Install v0.4.2 or later. No setting can work around it |
+| `failed to create llama_context`, `dflash requires ctx_other to be set` | The draft model is a different architecture from the model it drafts for | Harmless from v0.4.2: the server logs it and carries on. `localCoder.runtime.enableDraftModel` is off by default, and measurement showed the drafter gives no speedup |
 | The answer bubble stays empty for minutes | Expected. This is a reasoning model on a CPU | Watch the **Thinking** block above the answer — that is the model working. On an 8-core machine, budget roughly 3-4 minutes before the first word of the answer |
 | The reply ends up empty, with only a Thinking block | The output budget was spent before the answer began | Raise `localCoder.chat.maxOutputTokens` (try 6144), or ask a narrower question |
 
@@ -512,15 +512,15 @@ it cannot use. Treat Windows performance as CPU performance for now.
 
 ## 12. Reference values
 
-Correct for release `v0.4.1` and the weights currently published. If either is
+Correct for release `v0.4.2` and the weights currently published. If either is
 republished, take the values from the `.sha256` sidecar and the manifest rather
 than from here.
 
 | | |
 |---|---|
-| Release | `v0.4.1` |
+| Release | `v0.4.2` |
 | Extension id | `restricted-local.restricted-local-coder` |
-| VSIX | `restricted-local-coder-0.4.1-win32-x64.vsix` |
+| VSIX | `restricted-local-coder-0.4.2-win32-x64.vsix` |
 | VSIX size | see the `.sha256` sidecar on the release |
 | VSIX SHA-256 | see the `.sha256` sidecar on the release |
 | Model | `Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q4_K_XL.gguf` |

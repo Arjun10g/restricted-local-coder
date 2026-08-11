@@ -6,15 +6,15 @@ to substitute.
 ## What this page pins
 
 Digests below are exact and **version-locked**. They are correct for release
-`v0.4.1` and the weights currently published. When either is republished the
+`v0.4.2` and the weights currently published. When either is republished the
 digests change, so take them from the `.sha256` sidecar and the manifest rather
 than from memory.
 
 | | |
 |---|---|
-| Release | `v0.4.1` |
+| Release | `v0.4.2` |
 | Extension id | `restricted-local.restricted-local-coder` |
-| VSIX | `restricted-local-coder-0.4.1-win32-x64.vsix` |
+| VSIX | `restricted-local-coder-0.4.2-win32-x64.vsix` |
 | VSIX size | see the `.sha256` sidecar on the release |
 | VSIX SHA-256 | see the `.sha256` sidecar on the release |
 | Model | `Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q4_K_XL.gguf` |
@@ -55,7 +55,7 @@ stays locked.
 
 ```powershell
 New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
-Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1/restricted-local-coder-0.4.1-win32-x64.vsix" -OutFile "C:\coder\coder.vsix"
+Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.2/restricted-local-coder-0.4.2-win32-x64.vsix" -OutFile "C:\coder\coder.vsix"
 ```
 
 `curl` in PowerShell is an alias for `Invoke-WebRequest` and rejects curl flags,
@@ -73,8 +73,8 @@ Every release publishes a `.sha256` sidecar beside each VSIX, so the expected
 digest is fetched rather than typed. This stays correct across releases:
 
 ```powershell
-$Base = "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1"
-$Expected = ((Invoke-WebRequest -Uri "$Base/restricted-local-coder-0.4.1-win32-x64.vsix.sha256" -UseBasicParsing).Content -split '\s+')[0]
+$Base = "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.2"
+$Expected = ((Invoke-WebRequest -Uri "$Base/restricted-local-coder-0.4.2-win32-x64.vsix.sha256" -UseBasicParsing).Content -split '\s+')[0]
 $Actual = (Get-FileHash "C:\coder\coder.vsix" -Algorithm SHA256).Hash.ToLower()
 "expected $Expected"
 "actual   $Actual"
@@ -227,7 +227,7 @@ extracts the value for you:
 
 ```powershell
 .\scripts\Invoke-SmokeTest.ps1 `
-  -RuntimePath "$env:USERPROFILE\.vscode\extensions\restricted-local.restricted-local-coder-0.4.1\runtime\win32-x64\llama-server.exe" `
+  -RuntimePath "$env:USERPROFILE\.vscode\extensions\restricted-local.restricted-local-coder-0.4.2\runtime\win32-x64\llama-server.exe" `
   -ModelPath "$env:LOCALAPPDATA\RestrictedLocalCoder\models\Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q4_K_XL.gguf"
 ```
 

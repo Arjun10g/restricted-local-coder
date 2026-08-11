@@ -1,5 +1,17 @@
 # Change Log
 
+## 0.4.2
+
+- **The workspace context budget is cut from 48000 characters to 16000**, on
+  measurement. Prompt processing is the dominant cost in this extension and it
+  degrades sharply with depth: on the default profile, 59.7 tok/s at 579 prompt
+  tokens, 37.2 at 2327, and 16.4 at 9227 -- where a single turn took **9.5
+  minutes on a 28-core machine**. 48000 characters is roughly 12000 tokens, so
+  the old default put every turn in that last row. Measured on the same machine
+  and runtime as the 0.4.1 numbers.
+- `docs/PERFORMANCE.md` gains the depth table behind that change.
+
+
 ## 0.4.1
 
 Measured on a rented 28-core EPYC 7763 running the pinned b10355, using the exact

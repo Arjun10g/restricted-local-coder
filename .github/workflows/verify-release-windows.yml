@@ -11,7 +11,7 @@ on:
       version:
         description: Release version to verify, without the leading v
         required: true
-        default: '0.4.1'
+        default: '0.4.2'
 
 permissions:
   contents: read
