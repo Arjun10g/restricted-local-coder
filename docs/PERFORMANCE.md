@@ -155,6 +155,27 @@ This is also why prefix reuse matters more than raw throughput for this
 workload, and why the context builder selects relevant files rather than dumping
 the repository.
 
+### The two models degrade differently with depth
+
+Muse Glimmer uses a 2048-token sliding window on three of every four layers, so
+three quarters of it pays no depth penalty; Qwen3-Coder is full attention on all
+48 layers. That predicts Muse Glimmer degrades more gracefully, and it does:
+
+| prompt tokens | Qwen3-Coder prefill | Muse Glimmer prefill |
+|---|---|---|
+| ~600 | 59.68 tok/s | 12.15 tok/s |
+| ~2400 | 37.23 tok/s (-38%) | 11.24 tok/s (-7%) |
+
+So the 5x prefill advantage at a short prompt narrows to 3.3x by 2400 tokens.
+The advantage is real but it is not constant, and a comparison taken only on
+short prompts overstates it.
+
+**Not measured, and not guessed at:** the same comparison at ~9000 tokens, and
+whether `--cache-reuse` removes prefill from the second turn onward. Both runs
+were still in progress when the instance was released. The second is the more
+valuable of the two, because this extension resends a nearly identical workspace
+prefix every turn, and eliminating that work would beat any throughput tuning.
+
 ## Reasoning strength, for the optional Muse Glimmer profile
 
 Muse Glimmer's chat template accepts a `reasoning_strength` argument and
