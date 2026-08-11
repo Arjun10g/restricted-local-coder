@@ -52,3 +52,42 @@ jobs:
             }
           }
           if ($Failed) { exit 1 }
+
+  # The undo guarantee cannot be checked offline: it is a property of the editor,
+  # not of this code, and the offline suite drives applyEdit through a stub. This
+  # job is the only thing that would notice a regression to a filesystem write.
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Use Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install VS Code and a display server
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          # xvfb because the extension host needs a display even headless;
+          # libasound2t64 and libgbm1 because Electron will not start without them.
+          sudo apt-get install -y --no-install-recommends xvfb libasound2t64 libgbm1 libgtk-3-0
+          curl -fsSL -o vscode.tar.gz 'https://update.code.visualstudio.com/latest/linux-x64/stable'
+          mkdir -p "$RUNNER_TEMP/vscode"
+          tar -xzf vscode.tar.gz -C "$RUNNER_TEMP/vscode" --strip-components=1
+          "$RUNNER_TEMP/vscode/bin/code" --version
+      - name: Run integration tests in a real extension host
+        shell: bash
+        env:
+          # The launcher script is a shell wrapper; the tests need the binary.
+          VSCODE_BINARY: ${{ runner.temp }}/vscode/code
+        run: |
+          set -euo pipefail
+          # --no-sandbox: the runner is already a container and Electron's
+          # sandbox needs privileges it does not have.
+          export VSCODE_EXTRA_ARGS="--no-sandbox"
+          xvfb-run -a npm run test:integration
+

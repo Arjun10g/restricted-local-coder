@@ -81,6 +81,7 @@ limit_seconds="${INTEGRATION_TIMEOUT:-180}"
   --skip-release-notes \
   --skip-welcome \
   --disable-gpu \
+  ${VSCODE_EXTRA_ARGS:-} \
   "$workspace" &
 host=$!
 
