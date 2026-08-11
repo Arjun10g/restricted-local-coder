@@ -205,3 +205,21 @@ Withdrawing rather than re-uploading is also the right call on the merits: at
 `muse-glimmer-30b-kquant` (15.61 GiB, 16384), and the 5.65 bpw measurement
 recorded above means it was never the 4-bit file its name claimed. On a 32 GiB
 machine it was strictly the worse choice.
+
+### The DFlash drafter's digest is independently confirmed
+
+The drafter is the one file small enough (1.52 GiB) to verify end to end without
+renting anything. Downloaded from the release bucket on 2026-08-11 and hashed on
+a separate machine from the one that produced it:
+
+```
+27d9a805fa29b943cfb6ad4843367cd4eaaaf06bd452d8cc3e00a2cd18a677bc  1631205312 bytes
+```
+
+Byte-identical to the manifest. That matters more than one file's integrity: the
+digest was computed on the Shadeform instance and copied into the manifest by
+hand, and this is the first confirmation that the path from measurement to
+manifest entry does not corrupt what it carries. The three large profiles use the
+same path and remain unverified at the digest level — `check-models` confirms
+their size and magic, not their contents. Install-time verification is still what
+stands between a corrupt download and a running model.
