@@ -65,9 +65,11 @@ test('an installed drafter is passed with the flag names the pinned tag accepts'
   const args = managerWith(DRAFT_ON).accelerationArguments(modelFile, PROFILE);
   assert.ok(args.includes('--model-draft'));
   assert.equal(args[args.indexOf('--model-draft') + 1], path.join(directory, 'drafter.gguf'));
-  // 15, not 16: a DFlash drafter spends one of its 16 block slots on the
-  // anchor token, so 16 is clamped upstream with a warning.
-  assert.equal(args[args.indexOf('--spec-draft-n-max') + 1], '15');
+  // 3, not the drafter's 15-slot ceiling. Measured on 28 cores, a CPU
+  // verification pass costs ~157 ms of weight streaming plus ~77 ms per
+  // position verified, so a full 16-token block is break-even while a 4-token
+  // one is 2x. The ceiling is a limit, not a target.
+  assert.equal(args[args.indexOf('--spec-draft-n-max') + 1], '3');
   // Without --spec-type the drafter is loaded and never used: the speculative
   // type defaults to none for a local file, and is only inferred for Hugging
   // Face sidecar downloads. The symptom is silent -- memory spent, no speedup.

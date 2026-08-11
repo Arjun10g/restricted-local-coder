@@ -70,14 +70,20 @@ Two independent reasons it is slow.
 -cms,   --checkpoint-min-step N
 ```
 
-This matters *because* of the sliding window. With SWA, the cache for most layers
-has discarded old keys, so the server cannot simply rewind and reuse a prefix the
-way it can with full attention — it needs checkpoints to restore state.
+The reasoning was that with SWA the cache for most layers has discarded old
+keys, so the server cannot rewind and reuse a prefix the way it can with full
+attention, and would need checkpoints to restore state.
 
-We resend a large, nearly identical workspace prefix every turn. On a
-sliding-window model, prefix reuse depends on this being configured. **Measure
-`--cache-reuse` with and without checkpoints;** on this architecture they are
-likely to interact, and the pairing may be worth more than any backend change.
+**Measured, and both halves of that are wrong.** See `PERFORMANCE.md`. A pure
+append reuses the entire 7.2k prefix with no flags at all — sliding window and
+full attention behave identically, 2.6 s against 2.1 s. And when the prefix is
+*edited* near the top, `--ctx-checkpoints 8 --cache-reuse 256` changes the
+reprocess time by 0.5%: 573.6 s against 570.6 s. Neither flag is worth setting.
+
+What survives is the underlying point, in a stronger form: **prefix reuse is the
+largest win available, but it is won in the client, not in a flag.** Keep the
+workspace context stable and ahead of the history so each turn is a true append,
+and Muse Glimmer's second turn costs 2.6 s instead of 9.5 minutes.
 
 ### 2. Do not set `--swa-full`
 
@@ -131,11 +137,12 @@ long-context work rather than a curiosity.
 
 - Keep `--flash-attn auto` (measured slightly faster here).
 - Never `--swa-full`.
-- Set `--ctx-checkpoints` and measure with `--cache-reuse`.
-- `--spec-type draft-dflash --spec-draft-n-max 15`, kept only if acceptance
-  justifies it.
-- `reasoning_strength: low` — measured 4.2× faster to the first word with a
-  *longer* answer.
+- Do **not** set `--ctx-checkpoints` or `--cache-reuse`. Both measured as no-ops
+  on this workload, to within 0.5%.
+- `--spec-type draft-dflash --spec-draft-n-max 3` — measured 2.04×. **Not 15**;
+  15 measured 1.09× greedy and a net slowdown at this profile's temperature.
+- `reasoning_strength: low` — measured 4.0× faster to the first word than
+  `high` on the same box and prompt (92.8 s against 367.4 s, greedy).
 - Never stop on `<|eom|>`.
 
 ---
@@ -151,7 +158,7 @@ Fetched from the publisher's GGUF card and the Meta research blog, 2026-08-11.
 | RTX 5090 | 74.9 tok/s | 233.4 tok/s | 3.1× |
 | Apple M5 Max | 26.6 | 50.2 | 1.8× |
 | Apple M4 Max | 23.7 | 37.8 | 1.5× |
-| **our CPU box** | **4.45** | not measured | — |
+| **our CPU box** | **4.17** | **8.50** (measured, `n-max 3`) | **2.04×** |
 
 **Crucially: the Apple figures were measured with ExecuTorch, not llama.cpp.**
 Only the RTX number is a llama.cpp result. So **there is no published llama.cpp
@@ -172,31 +179,66 @@ Every command on the card uses `-ngl 99`. **There is no CPU guidance at all.**
 From the drafter card: it "predicts entire blocks of 16 tokens in a single
 forward pass. The main model then verifies these proposals in parallel."
 
-That matters more on CPU than the 1.5× Apple figure suggests, because on
-bandwidth-bound hardware **verifying 16 tokens costs one target forward pass —
-the same bytes as generating one token**. The drafter is 1.63 GB against the
-target's 16.75 GB, so it adds about 10%.
+### The prediction we made, and what the measurement did to it
 
-Bandwidth cost per accepted token, at our measured ~75 GB/s:
+This section used to argue that DFlash suits bandwidth-bound hardware *better*
+than the 1.5× Apple figure suggests, because on such hardware **verifying 16
+tokens costs one target forward pass — the same bytes as generating one token**.
+From that premise it predicted:
 
-| accepted of 16 | GB/token | speedup | implied tok/s |
+| accepted of 16 | GB/token | predicted speedup | predicted tok/s |
 |---:|---:|---:|---:|
 | 8 | 2.30 | 7.3× | 32.6 |
 | 6 | 3.06 | 5.5× | 24.5 |
 | **4** | **4.59** | **3.6×** | **16.3** |
 | 2 | 9.19 | 1.8× | 8.2 |
-| 1 | 18.38 | 0.9× | slower |
 
-The RTX result implies roughly 4 accepted per block. **If CPU acceptance is
-similar, Muse Glimmer lands near 16 tok/s** — within range of Qwen3-Coder's 19,
-while scoring 76.0 on SWE-bench Verified against Qwen's 51.6.
+**That prediction has now been measured on the same class of box, and its
+premise is false.** Speculation was confirmed engaged from the startup log, the
+sweep was run greedily so every row produced a byte-identical 430-token answer,
+and the result is in `PERFORMANCE.md`. The short version:
 
-The caveat that could kill it: verifying 16 positions is more *compute* than
-verifying one, and a CPU is compute-poor. The bandwidth saving is real; whether
-compute eats it is exactly what must be measured.
+| `--spec-draft-n-max` | acceptance | accepted per pass | measured tok/s | vs baseline |
+|---:|---:|---:|---:|---:|
+| none (baseline) | — | 1.00 | 4.17 | 1.00× |
+| 2 | 0.878 | 2.76 | 8.21 | 1.97× |
+| **3** | **0.813** | **3.44** | **8.50** | **2.04×** |
+| 4 | 0.764 | 4.06 | 8.49 | 2.04× |
+| 7 | 0.538 | 4.77 | 6.62 | 1.59× |
+| 15 | 0.354 | 6.31 | 4.54 | 1.09× |
 
-**We never measured this.** Our only attempt omitted `--spec-type`, so
-speculation never engaged and the result was withdrawn as invalid.
+Acceptance was never the problem — the drafter is good, and at a 16-token block
+it still lands 6.3 tokens per pass, above the 4 the RTX result implies. **The
+premise was wrong.** Extra verified positions are not free on a CPU. Turning
+each row's accepted-per-pass and ms/token into the cost of one target forward
+pass gives a straight line:
+
+| positions verified | ms per target forward pass |
+|---:|---:|
+| 1 (no speculation) | 240 |
+| 2 | 311 |
+| 4 | 405 |
+| 6 | 560 |
+| 8 | 721 |
+| 16 | 1390 |
+
+That is **≈157 ms fixed + ≈77 ms per verified position**. The fixed part is the
+weight stream — 16.4 GB in 157 ms is 105 GB/s, which is what this machine does.
+The per-position part is compute, and at 77 ms it costs *a third of a whole
+weight stream per extra token verified*. So verifying a 16-token block costs
+**5.8 target forward passes, not one**, and the speedup collapses to the ratio
+between 6.3 tokens gained and 5.8 passes spent.
+
+The caveat this document already flagged — "verifying 16 positions is more
+*compute* than verifying one, and a CPU is compute-poor" — is the whole story.
+It was right, and it is worth more than the arithmetic it was appended to.
+
+**The lever is still worth having, at the right setting.** Because the cost is
+linear in positions and the gain saturates, the optimum sits at a small block:
+`--spec-draft-n-max 3` or `4` gives **2.04×**, and upstream's own default for
+that flag is already 3. Our extension overrode it to 15 — the single worst value
+in the sweep, and the one that turns the drafter into a net loss at the model's
+own sampling settings.
 
 ### Other card details worth keeping
 
@@ -208,13 +250,20 @@ speculation never engaged and the result was withdrawn as invalid.
 - `-c 131072 -np 4` means 32k per slot; the card warns to scale `-c` with `-np`.
 - Full precision is 55+ GB, quantised to under 20 GB.
 
-### The open question this creates
+### The question this created, now answered
 
-If DFlash on CPU lands anywhere near 3× acceptance-limited speedup, the model
-choice is worth revisiting: a 76.0-SWE-bench model at ~16 tok/s beats a
-51.6-SWE-bench model at 19 tok/s for most work. Combined with
-`reasoning_strength: low` — measured at 27 s to first word, and DFlash would cut
-that too — Muse Glimmer becomes competitive rather than unusable.
+The open question was whether a 76.0-SWE-bench model at ~16 tok/s would beat a
+51.6-SWE-bench model at 19 tok/s and reopen the model decision.
 
-**This is one experiment, on one rented box, and it is the highest-value
-unmeasured thing left.**
+**It does not reach 16 tok/s. It reaches 8.5, and the decision does not reopen.**
+Best measured Muse Glimmer configuration — DFlash at `--spec-draft-n-max 3`,
+`reasoning_strength: low` — is 8.50 tok/s of generation and **53 seconds to the
+first word of the answer**, against Qwen3-Coder's 22.7 tok/s and 1.2 seconds on
+the same box. Doubling generation does not close a 44× latency gap, because that
+gap is reasoning tokens, not throughput.
+
+One genuine finding does survive in Muse Glimmer's favour, and it is the
+sliding-window one this document predicted: **at ~7.2k of context the prefill
+gap narrows from 5.6× to 2.0×, and the generation gap from 5.3× to 1.2×.** See
+`PERFORMANCE.md`. That makes Muse Glimmer a defensible *long-context* optional
+profile rather than a curiosity — but not a default.

@@ -132,9 +132,18 @@ class RuntimeManager {
         // A DFlash drafter spends one of its block slots on the anchor token,
         // so the usable maximum is blockSize - 1; asking for more is clamped
         // upstream with a warning.
+        //
+        // The ceiling is not the right default, though, and we shipped it as one
+        // until it was measured. On a CPU the target's verification pass costs
+        // roughly 157 ms of weight streaming plus 77 ms for every position it
+        // verifies, so a 16-token block costs 5.8 single-token passes while
+        // returning about 6.3 tokens -- break-even. Measured on 28 cores:
+        // n-max 3 is 2.04x, n-max 15 is 1.09x greedy and an outright slowdown at
+        // the profile's own temperature. Small blocks win. Upstream's default is
+        // 3 for the same reason.
         const draftCeiling = Number.isInteger(draft.blockSize) ? Math.max(1, draft.blockSize - 1) : 64;
-        const requestedDraft = config.get('runtime.draftMaxTokens', 15);
-        args.push('--spec-draft-n-max', String(clampInteger(requestedDraft, 1, draftCeiling, Math.min(15, draftCeiling))));
+        const requestedDraft = config.get('runtime.draftMaxTokens', 3);
+        args.push('--spec-draft-n-max', String(clampInteger(requestedDraft, 1, draftCeiling, Math.min(3, draftCeiling))));
         // A drafter left on the CPU while the main model is on the GPU is
         // usually slower than no speculation at all.
         if (offload !== null) {

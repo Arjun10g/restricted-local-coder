@@ -250,8 +250,11 @@ below it is a memory decision; going above it is a correctness one.
 6. Leave `runtime.gpuLayers` on `auto`. If preflight reports VRAM below the
    profile's `minVramGiB`, compare `off` against `auto` with the benchmark
    script before assuming a partial offload helps.
-7. `runtime.draftMaxTokens` defaults to 16. Raise it only if the drafter is
-   agreeing often; when it disagrees, larger drafts cost throughput.
+7. `runtime.draftMaxTokens` defaults to 3, which is what measurement picked and
+   also what upstream defaults to. Raising it is almost always wrong on a CPU:
+   verification cost grows with the number of positions verified, so larger
+   drafts cost throughput even when the drafter agrees. Measured, 15 is a net
+   loss. See `docs/PERFORMANCE.md`.
 
 ---
 
