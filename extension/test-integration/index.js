@@ -21,6 +21,7 @@ const { runAll } = require('./harness');
 async function run() {
   // Requiring the suite registers its cases with the harness.
   require('./suite/agent-undo.test.js');
+  require('./suite/inline-completion.test.js');
 
   const results = await runAll();
   const failed = results.filter((result) => !result.ok);
