@@ -565,7 +565,7 @@ The extension therefore starts conservatively:
 7. Prefer the 4-bit `Q4_K_XL` profile. Going below about 4 bits per weight buys
    file size but not proportional speed on a CPU, because dequantisation cost
    rises as the byte count falls, and it measurably costs code correctness. The
-   two "TQ1" profiles were removed in 0.4.2: their GGUF headers declared
+   two "TQ1" profiles were removed in 0.5.0: their GGUF headers declared
    `IQ1_S`, contained no ternary tensors at all, and the name was a publisher
    labelling choice rather than a format.
 
@@ -638,3 +638,52 @@ Use `scripts/Invoke-SmokeTest.ps1` for a basic operational test and `scripts/Inv
 - power mode and background applications.
 
 Record cold load time, first-token latency, completion tokens per second, total latency, median and tail values, peak working set, hard page faults, and benchmark/test correctness. A smaller GGUF is not a win when it causes enough quality loss to require repeated generations.
+
+---
+
+## Why our numbers differ from the model card
+
+They do not, once normalised for hardware. Same code, same efficiency, different
+silicon.
+
+| | throughput | × file size | effective bandwidth | as % of rated |
+|---|---:|---:|---:|---:|
+| Model card, RTX 5090 | 74.9 tok/s | 16.75 GB | ~1,254 GB/s | ~70% of ~1.79 TB/s |
+| Our CPU box | 4.45 tok/s | 16.76 GB | ~74.6 GB/s | ~70% of sustainable |
+
+**Identical bandwidth efficiency.** The 5090 simply has roughly 17× the memory
+bandwidth, and 4.45 × 17 ≈ 75 — the card's own number, reproduced. A dense 30B
+streams its entire file once per generated token, and no software change turns
+75 GB/s into 1,250 GB/s.
+
+Two further reasons the headline figures read high:
+
+- The **233 tok/s** is DFlash at greedy sampling. The 3.1× has not been
+  reproduced anywhere; a real RTX 4090 run measured 1.5× at 80k context, and
+  acceptance degrades at the card's own recommended temperature of 1.0. Our own
+  CPU measurement was 2.04×, at a small block.
+- **Every command on the card uses `-ngl 99`** — full GPU offload. There is no
+  official CPU number and no CPU guidance at all. The closest non-flagship
+  analogues are an M4 Max at 23.7 tok/s (ExecuTorch, ~400 GB/s unified memory)
+  and AMD integrated graphics around 24 via Vulkan.
+
+So chasing 75 tok/s on this CPU is not a defect to fix; it is a bandwidth wall.
+
+**Where we are genuinely below what this hardware permits** is narrower and more
+actionable:
+
+- **Prompt processing.** 12.9 tok/s against a generation rate of 4.45 is a ratio
+  of 2.9×, where a dense model of this size should show 5–20×.
+- **The depth collapse.** The MoE default drops from 22.68 tok/s on a short
+  prompt to 4.01 at ~7.2k context, where bandwidth arithmetic predicts ~19.
+- **MoE gather efficiency.** The default reads 1.78 GiB of active weights per
+  token, which at 22.68 tok/s is only ~40 GiB/s of the 75–105 the same box
+  sustains on a dense model — scattered expert reads rather than a stream.
+
+Those three are real recoverable losses. Raw short-prompt generation on a dense
+model is not.
+
+If the published class of numbers is the goal, the routes are hardware
+(a discrete Arc GPU) or architecture (the MoE default, whose 3.3B active
+parameters per token sit on the right side of the bandwidth wall — subject to
+the depth finding above).
