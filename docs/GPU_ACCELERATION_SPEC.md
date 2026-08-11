@@ -95,9 +95,9 @@ The Intel-capable backends, all with prebuilt Windows binaries:
 
 | Backend | Size | Notes |
 |---|---:|---|
-| **Vulkan** | 34 MB | Portable, works on Intel/AMD/NVIDIA. Only one small enough to ship in the VSIX. |
-| SYCL | 120 MB | Intel's native oneAPI path; often faster than Vulkan on Intel silicon. |
-| OpenVINO | 81 MB | Intel CPU/GPU/NPU. Newer Core Ultra parts have an NPU. |
+| **Vulkan** | 34 MB | Portable, works on Intel/AMD/NVIDIA. Only one small enough to ship in the VSIX. The Windows/Intel choice — see below. |
+| SYCL | 120 MB | Researched 2026-08-11: fragile-to-broken on Arc/Windows in current builds; its occasional ~5% tg edge does not survive the setup cost. Deprioritized (MUSE_GLIMMER_SPEEDUP_RESEARCH.md §1, §5). |
+| OpenVINO | 81 MB | Researched 2026-08-11: **no Muse Glimmer support exists** in optimum-intel / OpenVINO GenAI. Not an option for this model. |
 
 `nvidia-smi` detection is now useless for this machine. Preflight must enumerate
 **any** adapter — on Windows `Get-CimInstance Win32_VideoController` gives names
@@ -133,12 +133,18 @@ Establish which before sizing the effort. The adapter name from
 
 1. Fix the request shape first (see `RUNTIME_PERFORMANCE_SPEC.md` §0) — no
    backend helps with prefill we can avoid entirely.
-2. Vulkan build, prefill and generation separately, against the CPU baseline.
-3. SYCL against Vulkan on the same Intel hardware. Intel's native path is often
-   faster on Intel silicon, and 120 MB versus 34 MB is only worth paying if it
-   wins by a margin that matters.
-4. Vulkan or SYCL plus `--n-cpu-moe`, sweeping N for the knee — Qwen profiles
-   only, since Muse Glimmer is dense.
+2. Vulkan build, prefill and generation separately, against the CPU baseline —
+   with the newest Intel driver first (a driver update alone measurably
+   doubled Vulkan decode on Battlemage-class hardware), `-ub 2048` in the pp
+   sweep (+61% prefill measured on Arc, zero decode penalty), no KV quant,
+   and `--split-mode layer` if the drafter is loaded (tensor split fails to
+   build the dflash context).
+3. SYCL against Vulkan only if Vulkan disappoints — current Arc/Windows
+   builds are fragile-to-broken and the occasional ~5% tg edge does not
+   justify 120 MB vs 34 MB (MUSE_GLIMMER_SPEEDUP_RESEARCH.md §5).
+4. Vulkan plus `--n-cpu-moe`, sweeping N for the knee — Qwen profiles
+   only, since Muse Glimmer is dense (its play is a fully-resident smaller
+   quant: UD-Q3_K_XL + drafter fits 16 GB).
 
 CUDA is not on this list. The target hardware cannot run it.
 

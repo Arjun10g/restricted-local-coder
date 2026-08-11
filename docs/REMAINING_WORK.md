@@ -47,6 +47,16 @@ usable insertion.
 - [ ] **Defensive `<think>` strip** when appending to history and when
       persisting, so a model that emits tags inline cannot poison its own
       context forever.
+- [ ] **`chat.reasoningStrength: 'off'` selects the slowest mode.**
+      `reasoningStrength()` returns `undefined` for `'off'`, nothing is sent,
+      and the template defaults to `high` — the 147-second behaviour under a
+      setting named "off". Map `'off'` to `--reasoning-budget 0` (b10355
+      supports it) or at minimum to `low`.
+- [ ] **FIM/chat slot thrash, document or fix.** With one slot, any inline
+      completion evicts the chat conversation's KV, forcing a full re-prefill
+      on the next chat turn. Acceptable while inline completion defaults off;
+      say so in PERFORMANCE.md, and note the `--parallel 2` trade-off (splits
+      the context budget between slots).
 - [ ] `maxOutputTokens` sized as thinking + answer, since `max_tokens` counts
       reasoning tokens (proven from source).
 
@@ -57,6 +67,31 @@ rather than nothing.
 
 ## C. Throughput, latency, and context — the user asked for these explicitly
 
+Ordering note: the first three items below outrank every knob measurement.
+They were found by reading the request-assembly code
+(`chatView.ask()` + `contextBuilder.build()`); details in
+`RUNTIME_PERFORMANCE_SPEC.md` §0.
+
+- [ ] **Fix the request shape.** The workspace context is embedded in the
+      final user message, after the growing history, so consecutive requests
+      share only the system prompt as a prefix and the context is re-prefilled
+      every turn even when identical. Move stable context into the system
+      message (fixed position, before history) so each turn is a pure append —
+      pure prefix extension reuses KV even on SWA with no checkpoints.
+      **Done when:** turn-2 prompt processing covers only the new turn's
+      tokens, confirmed via `timings`.
+- [ ] **Snapshot the context per conversation** instead of rebuilding
+      per message (retrieval is query-dependent, so today the context differs
+      every turn and even a perfect cache would miss). Volatile blocks —
+      diagnostics, selection — move to the end, in the user message.
+      **Done when:** two consecutive turns produce byte-identical prefixes up
+      to the previous turn's end.
+- [x] ~~A/B `--no-cache-idle-slots`~~ **Resolved by source reading, no A/B
+      needed** (see RUNTIME_PERFORMANCE_SPEC.md §0): with explicit
+      `--parallel 1`, idle-slot KV clearing is impossible (`kv_unified` only)
+      and the flag merely skips a useless per-request state serialize. Keep
+      it. Verify reuse the direct way instead: `timings.prompt_n` on turn 2
+      after the request-shape fix.
 - [ ] **Telemetry.** Send `"timings_per_token": true` and use the server's
       `timings` rather than timing deltas ourselves. Show one quiet line after
       each response: tokens, tok/s, **ms/token**. Log the same.
