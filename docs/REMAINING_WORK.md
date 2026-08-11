@@ -225,3 +225,37 @@ attached, and estimates are labelled as estimates.
   floors: roughly 10 tok/s for chat, 30–40 for code generation, 40–60+ decode
   and 150–300+ prefill for agentic work. If we sit at the chat floor and below
   the agentic floor, say so. Do not oversell it.
+
+---
+
+## Status at 0.5.3 (2026-08-11)
+
+**Closed.**
+
+- *Undo was never executed.* Five tests now run in a real extension host and
+  prove agent edits are undoable, including that disk stays unchanged until the
+  user saves — the assertion that would catch a regression to `fs.writeFile`.
+- *The inline completion provider had no coverage.* Eight tests drive it through
+  real documents, positions, settings and cancellation.
+- *Neither ran in CI.* Both do, on Linux under xvfb. The CI log was checked for
+  the failure this harness invites — passing without running anything — and
+  shows 13/13 with per-test timings.
+- *A profile pointed at a file that was never uploaded.* Withdrawn, and
+  `npm run check-models` now verifies every URL resolves to a correctly sized
+  GGUF.
+- *Test code shipped inside the 0.5.2 VSIX.* Fixed in 0.5.3, with a check that
+  enumerates test directories rather than trusting a glob.
+
+**Still open, and both need the actual machine.**
+
+- **Nothing has run on the Windows workstation.** Everything above was verified
+  on macOS and Linux CI. The Windows-specific paths — the bootstrap script under
+  PowerShell 5.1, the bundled `llama-server.exe`, `libomp140.x86_64.dll`
+  resolution — have CI coverage but no real run on the target hardware.
+- **The Intel GPU is unmeasured.** Preflight enumerates the adapter; no
+  throughput number exists for it. Every performance figure on record is CPU-only
+  and came from a rented AMD EPYC instance, which is not the target machine
+  either.
+
+These are the two that decide whether this is usable in practice, and neither can
+be closed from here.
