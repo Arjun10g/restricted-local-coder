@@ -26,6 +26,13 @@ changed the shipped default from a `q8_0` KV cache to `f16`, so numbers taken
 before it under-report the default profile at depth by as much as 3.1×.**
 Sections written before it are annotated where that matters.
 
+A fourth session, on **another box of the same class again** — AMD EPYC 7763, 28
+vCPU, 56 GB, Ubuntu 22.04, b10355 — drove the agent loop with the write tools
+enabled and added the task-level numbers in
+[AGENT_VALIDATION.md](AGENT_VALIDATION.md) and the section "The agentic-floor
+claim, revisited". It ran with the f16 KV cache, so it is comparable to the third
+session and not to anything earlier.
+
 **No GPU was used in any of it.** The `ubuntu-x64` release archive contains only
 `libggml-cpu-*.so`, exactly as the shipped `win-cpu-x64` archive does, so
 `--n-gpu-layers -1` was a no-op and no offload line appears in any startup log.
@@ -880,6 +887,48 @@ And this is the favourable machine. The Windows target is a laptop with fewer
 cores and less memory bandwidth; prefill scales with cores, so it will be worse
 there. None of this is a reason not to ship it, but nobody should be told it is
 fast.
+
+### The agentic-floor claim, revisited by measuring tasks rather than tokens
+
+The paragraph above is written against **throughput floors**, and on those the
+default profile is an order of magnitude short of what agentic work is said to
+want. That framing was written before anything had actually driven the agent
+loop, and a later session did: 72 real multi-step agent tasks on the same class
+of machine, with the f16 KV cache. See
+[AGENT_VALIDATION.md](AGENT_VALIDATION.md).
+
+The task-level result is better than the token-level floors predict, and the
+claim should be read with that qualification:
+
+| | Measured, agent loop, this machine |
+|---|---|
+| One targeted edit, small workspace | 27 s |
+| Read a file then edit it, small workspace | 21 s |
+| Run tests, fix, re-run, small workspace | 76 s |
+| The same three at 7.5-8.8k of context | 36 s / 41 s / 127 s |
+| Generation at 7-9k of depth, in the loop | 8.1-8.6 tok/s |
+| First turn, 7k of workspace context, prefill only | ~170 s |
+
+Two corrections to the pessimism, and one confirmation of it.
+
+**Generation at depth is no longer the problem.** The loop held 8.1-8.6 tok/s
+at 7.5-8.8k tokens, and the rate at the *deepest* step of each task was within
+5% of the whole-task average. On the `q8_0` cache this repository shipped until
+0.5.1, the equivalent depth measured 3.46 tok/s, and a three-step task would have
+been unusable rather than slow. The KV cache fix is what moved agent mode from
+"do not" to "yes, for scoped work".
+
+**Task success does not track the throughput floors.** 64 of 72 tasks reached a
+verified-correct result — the test suite was executed, not pattern-matched — with
+zero malformed tool calls and zero ambiguous `edit_file` arguments. "Well under a
+tenth of what agentic work wants on prefill" is true of the tokens per second and
+false as a prediction of whether the work completes.
+
+**Prefill is still the binding cost, and it is front-loaded.** The ~170 s to
+process a 7k-token context is paid once per conversation, before the first token;
+every later turn is a pure append at 130-160 ms. That is the number to quote to
+anyone deciding whether to enable agent mode, and it is why pinning the stable
+prefix matters more than any tuning in this file.
 
 ## Measurement
 

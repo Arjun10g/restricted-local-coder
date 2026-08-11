@@ -156,22 +156,38 @@ attached, and estimates are labelled as estimates.
 
 ## F. Agent write tools — per `AGENT_WRITE_TOOLS_SPEC.md`
 
-- [ ] `write_file` and `edit_file`, applied through `vscode.workspace.applyEdit`
+- [x] `write_file` and `edit_file`, applied through `vscode.workspace.applyEdit`
       so every change lands in the undo stack. Test against a stubbed
       `applyEdit` so a later refactor to `fs.writeFile` fails the build.
-- [ ] `edit_file` requires `old_text` to match **exactly once**; zero refuses,
+- [x] `edit_file` requires `old_text` to match **exactly once**; zero refuses,
       two or more refuses and names the count.
-- [ ] `agent.allowWrite`, default **false**, separate from command execution.
-- [ ] Refuse writes under `.localcoder/` — it is injected into every prompt.
-- [ ] Audit records path, operation, byte delta; never content.
-- [ ] **Validate against the live model**: single edit; read-then-edit; "run the
-      tests and fix the failure". Report attempts-valid, attempts-ambiguous, and
-      wall-clock per task. If the model cannot drive the tools reliably, that is
-      a finding — report it, do not smooth it over.
-- [ ] Add an `edit_file` argument-shape task to `bench/coding-smoke.json`.
-- [ ] Check whether upstream PR #26849 has merged. Until it does, expect roughly
-      17% of tool calls to have their markup swallowed into visible content, and
-      attribute that to upstream rather than our permission layer.
+- [x] `agent.allowWrite`, default **false**, separate from command execution.
+- [x] Refuse writes under `.localcoder/` — it is injected into every prompt.
+- [x] Audit records path, operation, byte delta; never content.
+- [x] **Validate against the live model**: done, see `docs/AGENT_VALIDATION.md`.
+      72 tasks, 190 tool calls on a 28-core EPYC 7763 with b10355 and the f16 KV
+      cache: 0 malformed arguments, 0 ambiguous `old_text` in 64 `edit_file`
+      calls, 64 of 72 tasks verified correct. The 8 failures are one condition —
+      the model believes a `<workspace_context>` that does not contain the file
+      and asks rather than calling `read_file`. Wall-clock 21-127 s per task
+      warm, plus ~170 s of prefill on the first turn of a conversation with a 7k
+      context.
+- [x] Add an `edit_file` argument-shape task to `bench/coding-smoke.json` —
+      `edit-file-argument-shape`, which fails a one-word or duplicated-line
+      `old_text`.
+- [x] Check whether upstream PR #26849 has merged. Both #26849 and #26879 were
+      still open, but **the leak did not reproduce on b10355**: 0 of 262
+      Qwen3-Coder agentic turns and 0 of 36 Muse Glimmer turns carried tool
+      markup in visible content, scanning both a fixed marker list and any
+      angle-bracket-shaped token. The 17% figure is not what this build does.
+      Enough Muse turns to exclude 17% (p about 0.001), not enough to call the
+      bug gone. Worth reporting upstream that b10355 with `--jinja` does not
+      reproduce it.
+- [ ] Documented behaviour, not a defect, but worth a decision: the model treats
+      `<workspace_context>` as the complete truth about the workspace and will
+      not call `read_file` to check a file retrieval omitted. Either instruct it
+      in the system prompt that the context is partial, or accept it and phrase
+      agent tasks concretely. Measured 8 of 8 failures in that condition.
 
 ---
 

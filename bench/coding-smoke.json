@@ -110,5 +110,21 @@
       ";\\s*rm",
       "sh\\s+-c"
     ]
+  },
+  {
+    "id": "edit-file-argument-shape",
+    "language": "json",
+    "category": "tool-use",
+    "prompt": "You may call a tool named edit_file that takes {\"path\": \"...\", \"old_text\": \"...\", \"new_text\": \"...\"} and replaces old_text with new_text. old_text must appear EXACTLY ONCE in the file or the edit is refused; include enough surrounding context to make it unique. Here is src/text.js:\n\nfunction parse(input) {\n  const value = input.trim();\n  return value;\n}\n\nfunction format(input) {\n  const value = input.trim();\n  return value;\n}\n\nInside format only, change input.trim() to input.trimEnd(). Emit only the JSON arguments object for that edit_file call. No prose, no Markdown fences.",
+    "mustMatch": [
+      "\\\"path\\\"\\s*:\\s*\\\"src/text\\.js\\\"",
+      "\\\"old_text\\\"\\s*:\\s*\\\"(?:[^\\\"\\\\]|\\\\.)*function format",
+      "\\\"new_text\\\"\\s*:\\s*\\\"(?:[^\\\"\\\\]|\\\\.)*trimEnd"
+    ],
+    "mustNotMatch": [
+      "\\\"old_text\\\"\\s*:\\s*\\\"(?:const value|input\\.trim|\\s*\\\\n)",
+      "\\\"old_text\\\"\\s*:\\s*\\\"[^\\\"\\\\]{0,24}\\\"",
+      "```"
+    ]
   }
 ]

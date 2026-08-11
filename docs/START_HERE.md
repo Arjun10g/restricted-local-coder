@@ -402,6 +402,13 @@ To allow commands:
 That list **replaces** the built-in defaults. Keep entries specific: a rule of
 just `git` would also permit `git push`.
 
+File editing is a separate switch again, `localCoder.agent.allowWrite` (default
+`false`); every edit goes through the editor, so `Ctrl+Z` undoes it. Measured on
+the default model, a scoped edit takes 20-40 seconds and a "run the tests and fix
+it" takes one to two minutes, plus about 170 seconds on the first turn of a
+conversation to read a large workspace context — see
+[AGENT_VALIDATION.md](AGENT_VALIDATION.md) before enabling it.
+
 See what it did: `Ctrl+Shift+P` → **Local Coder: Show Agent Audit Log**. Every
 call is recorded with its outcome and reason. File *contents* are never logged.
 

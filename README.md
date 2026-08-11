@@ -41,7 +41,7 @@ Only the Muse Glimmer weights and drafter are published to the configured mirror
 - GPU offload (opt-out) and speculative decoding (opt-in), both degrading to plain CPU decoding when the hardware or a compatible drafter is absent. A launch that offers a drafter and fails is retried without it, so an incompatible drafter cannot stop the model loading.
 - Conversation history budgeted against the model's context window, and optional per-workspace transcript persistence (off by default).
 - Optional project memory in `.localcoder/memory.md`, treated as untrusted workspace data.
-- Optional agent mode — read, list, search, and approved command execution — disabled by default, with argv-prefix permissions, no shell, a bounded step count, and an audit log. See [docs/AGENT_MODE.md](docs/AGENT_MODE.md).
+- Optional agent mode — read, list, search, and approved command execution — disabled by default, with argv-prefix permissions, no shell, a bounded step count, and an audit log. File editing is a second switch again, off by default, and every edit is applied through the editor so `Ctrl+Z` undoes it. Validated against the real model: 0 malformed tool calls and 0 ambiguous edits in 190 calls. See [docs/AGENT_MODE.md](docs/AGENT_MODE.md) and [docs/AGENT_VALIDATION.md](docs/AGENT_VALIDATION.md).
 - Bounded active-file, diagnostics, open-file, and lexical workspace context.
 - Active secret-file rejection and exclusions for credential directories, keys, models, dependencies, and generated output.
 - Content-safe untrusted-context wrappers and adaptive code fences that file text cannot close directly.
@@ -206,7 +206,7 @@ The included benchmark performs static checks and never executes generated code.
 
 - `extension/` — dependency-free VS Code extension source and model allow-list.
 - `extension/src/agent/` — opt-in tool use: argv-prefix permissions, shell-free execution, a bounded loop, and an audit log. See [docs/AGENT_MODE.md](docs/AGENT_MODE.md).
-- `bench/` — small deterministic coding screen.
+- `bench/` — small deterministic coding screen, plus `agent-validation.js`, which drives the real agent loop against a running llama-server.
 - `scripts/` — build, acquisition, install, preflight, smoke, benchmark, and offline staging.
 - `tools/` — source-policy, manifest, pinned-checkout, and runtime-collection helpers.
 - `.github/workflows/` — source CI and platform VSIX build/release with full-commit action pins.
