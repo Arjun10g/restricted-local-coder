@@ -284,10 +284,23 @@ class ChatViewProvider {
       rules: config.get('agent.allowedCommands', []),
       maxSteps: config.get('agent.maxSteps', 8),
       allowWrite: config.get('agent.allowWrite', false),
+      allowWeb: config.get('web.enabled', false),
+      allowedHosts: config.get('web.allowedHosts', []),
+      searchUrlTemplate: config.get('web.searchUrl', ''),
       applyEdit: (edit) => this.applyAgentEdit(edit),
       audit: this.audit.recorder(),
       signal,
       confirm: async ({ tool, argv, args }) => {
+        const isWeb = tool === 'web_search' || tool === 'web_fetch';
+        if (isWeb) {
+          const what = args?.query ? `search for: ${args.query}` : `fetch: ${args?.url}`;
+          const answer = await vscode.window.showWarningMessage(
+            `Local Coder wants to send a request off this machine — ${what}`,
+            { modal: true, detail: 'This leaves the workstation. The query is recorded in the agent audit log.' },
+            'Send once'
+          );
+          return answer === 'Send once';
+        }
         const isWrite = tool === 'write_file' || tool === 'edit_file';
         const message = isWrite
           ? `Local Coder wants to modify: ${args?.path}`

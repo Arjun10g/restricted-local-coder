@@ -198,3 +198,49 @@ the default profile passes both and is measured in
 This **replaces** the built-in defaults rather than extending them. Keep entries
 as specific as the task allows: a rule of `git` would permit `git push`, since
 prefix matching allows trailing arguments.
+
+---
+
+## Web access — off by default, and a deliberate reversal
+
+Everything else in this extension runs locally and sends nothing. Web access is
+the one capability that breaks that, so it is gated separately from every other
+agent permission and starts disabled with an empty host list.
+
+```json
+{
+  "localCoder.web.enabled": true,
+  "localCoder.web.allowedHosts": ["docs.python.org", "developer.mozilla.org"],
+  "localCoder.web.searchUrl": "https://your-internal-search/?q={query}"
+}
+```
+
+### The risk, stated plainly
+
+**The query is the exfiltration channel.** A model that can search can encode
+workspace content into `?q=`, and no amount of filtering the *results* addresses
+that. Everything below is aimed at the outbound side:
+
+| Control | What it does |
+|---|---|
+| Off by default, separate setting | Reading your files does not imply permission to transmit |
+| Empty allow-list by default | No wildcard and no "any host" value, so a half-finished setup reaches nothing |
+| Audit **before** the request | Every query and URL is logged before it is sent, so a crash mid-flight still leaves the record |
+| 300 characters, single line | A whole file cannot be smuggled into one query |
+| Allow-list re-checked per redirect | An approved host cannot bounce the request somewhere else |
+| HTTPS only, no credentials in URLs | |
+| `confirm` mode prompts per request | The dialog names what is being sent and where |
+
+These reduce and record the risk. **They do not eliminate it.** If the workstation
+is meant to be sealed, leave this off — and prefer an internal documentation host
+over a public search engine if you turn it on.
+
+Read what was sent with **Local Coder: Show Agent Audit Log**; web calls are
+recorded under a distinct `transmitted` outcome.
+
+### What it cannot do
+
+Fetched pages are neutralised and framed as `<web_result>` exactly like workspace
+files, so a page cannot close its wrapper or issue instructions; scripts and
+styles are stripped before the text is used. There is no wildcard host. There is
+no HTTP.

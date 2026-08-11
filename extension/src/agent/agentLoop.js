@@ -56,6 +56,9 @@ async function runAgentLoop({
   spawn,
   allowWrite = false,
   applyEdit,
+  allowWeb = false,
+  allowedHosts = [],
+  searchUrlTemplate,
 }) {
   const conversation = [...messages];
   const steps = [];
@@ -67,7 +70,7 @@ async function runAgentLoop({
     const response = await client.chatWithTools({
       messages: conversation,
       profile,
-      tools: toolSchemasFor({ allowWrite }),
+      tools: toolSchemasFor({ allowWrite, allowWeb }),
       reasoningStrength,
       signal,
     });
@@ -128,6 +131,9 @@ async function runAgentLoop({
           allowWrite,
           applyEdit,
           writeCounter,
+          allowWeb,
+          allowedHosts,
+          searchUrlTemplate,
         });
       }
 

@@ -153,6 +153,24 @@ assert.ok(chatViewSource.includes('WorkspaceEdit'), 'Agent edits must be applied
 const auditSource = fs.readFileSync(path.join(agentRoot, 'auditLog.js'), 'utf8');
 assert.ok(auditSource.includes('CONTENT_KEYS'), 'The audit log must redact file contents rather than record them');
 
+// Web access is the only capability that sends anything off the machine, and it
+// reverses this extension's default posture, so its controls are asserted.
+const webTools = fs.readFileSync(path.join(agentRoot, 'webTools.js'), 'utf8');
+assert.ok(settings['localCoder.web.enabled'], 'Web access must be a declared, user-visible setting');
+assert.equal(settings['localCoder.web.enabled'].default, false, 'Web access must be off by default');
+assert.deepEqual(settings['localCoder.web.allowedHosts'].default, [], 'The host allow-list must start empty so it fails closed');
+assert.ok(webTools.includes("protocol !== 'https:'"), 'Web tools must refuse cleartext HTTP');
+assert.ok(webTools.includes('MAX_QUERY_CHARACTERS'), 'Queries must be length-capped; the query is the exfiltration channel');
+// A redirect from an approved host to an unapproved one is the obvious way out
+// of an allow-list, so redirects are followed by hand and re-checked.
+assert.ok(webTools.includes("redirect: 'manual'"), 'Redirects must be followed manually so the allow-list is re-applied');
+assert.ok(webTools.includes('neutralizeContextMarkup'), 'Fetched pages re-enter the prompt and must be neutralized');
+const toolsSource = fs.readFileSync(path.join(agentRoot, 'tools.js'), 'utf8');
+assert.ok(
+  toolsSource.includes("'transmitted'"),
+  'Web calls must be audited under a distinct outcome, so what left the machine is reviewable'
+);
+
 const agentLoop = fs.readFileSync(path.join(agentRoot, 'agentLoop.js'), 'utf8');
 assert.ok(agentLoop.includes('maxSteps'), 'The agent loop must be bounded');
 // Every effect has to funnel through the one place permission is decided.

@@ -382,6 +382,24 @@
           "default": true,
           "description": "Include active-document diagnostics in local prompts."
         },
+        "localCoder.web.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Let the agent search and fetch web pages. OFF BY DEFAULT, and a deliberate reversal of this extension's posture: everything else runs locally and sends nothing. The search query itself is the risk \u2014 a model that can search can encode workspace content into it \u2014 so every query and URL is recorded in the agent audit log before the request is sent, queries are capped at 300 characters and a single line, and only hosts you list are reachable. Read localCoder.web.allowedHosts before enabling."
+        },
+        "localCoder.web.allowedHosts": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Hosts the agent may contact, e.g. \"docs.python.org\". A bare domain also covers its subdomains. There is no wildcard and no \"any host\" value: an empty list means no web access, so a half-finished configuration fails closed. The list is re-checked after every redirect, so an approved host cannot bounce the request elsewhere."
+        },
+        "localCoder.web.searchUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Search endpoint, with {query} where the URL-encoded terms go \u2014 for example an internal documentation search. Its host must also appear in localCoder.web.allowedHosts. Empty disables web_search while leaving web_fetch available for known URLs."
+        },
         "localCoder.agent.mode": {
           "type": "string",
           "default": "off",

@@ -112,14 +112,44 @@ function normalizeMode(mode) {
 // decisions and should not be bundled into one setting.
 const WRITE_TOOLS = new Set(['write_file', 'edit_file']);
 
+// The only tools that send anything off the machine. Gated separately from
+// everything else, because "may read my files" and "may transmit" are entirely
+// different decisions and the product's default posture is that nothing leaves.
+const WEB_TOOLS = new Set(['web_search', 'web_fetch']);
+
 function isWriteTool(tool) {
   return WRITE_TOOLS.has(tool);
 }
 
-function evaluate({ mode, tool, argv, rules, allowWrite = false }) {
+function isWebTool(tool) {
+  return WEB_TOOLS.has(tool);
+}
+
+function evaluate({ mode, tool, argv, rules, allowWrite = false, allowWeb = false, allowedHosts = [] }) {
   const effective = normalizeMode(mode);
   if (effective === 'off') {
     return { allowed: false, needsConfirmation: false, reason: 'Agent mode is disabled.' };
+  }
+
+  if (isWebTool(tool)) {
+    if (!allowWeb) {
+      return {
+        allowed: false,
+        needsConfirmation: false,
+        reason: 'Web access is disabled. Set localCoder.web.enabled to true to allow it.',
+      };
+    }
+    // An empty allow-list means no reachable hosts, so a half-finished
+    // configuration fails closed rather than opening the whole internet.
+    if (!Array.isArray(allowedHosts) || allowedHosts.length === 0) {
+      return {
+        allowed: false,
+        needsConfirmation: false,
+        reason: 'No hosts are approved. Add them to localCoder.web.allowedHosts.',
+      };
+    }
+    // Confirm mode confirms transmission, exactly as it confirms a command.
+    return { allowed: true, needsConfirmation: normalizeMode(mode) === 'confirm', reason: '' };
   }
 
   if (isWriteTool(tool)) {
@@ -166,8 +196,10 @@ function evaluate({ mode, tool, argv, rules, allowWrite = false }) {
 module.exports = {
   DEFAULT_COMMAND_RULES,
   MODES,
+  WEB_TOOLS,
   WRITE_TOOLS,
   evaluate,
+  isWebTool,
   isWriteTool,
   isCommandAllowed,
   matchesRule,

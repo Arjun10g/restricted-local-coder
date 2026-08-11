@@ -4,13 +4,14 @@ const childProcess = require('node:child_process');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { isLikelySourcePath, isSensitivePath, neutralizeContextMarkup } = require('../contextRules');
-const { evaluate, isWriteTool, resolveInsideWorkspace } = require('./permissions');
+const { evaluate, isWebTool, isWriteTool, resolveInsideWorkspace } = require('./permissions');
 const {
   MAX_WRITES_PER_TURN,
   WRITE_TOOL_SCHEMAS,
   editFileTool,
   writeFileTool,
 } = require('./writeTools');
+const { WEB_TOOL_SCHEMAS, webFetchTool, webSearchTool } = require('./webTools');
 
 const MAX_FILE_CHARACTERS = 20_000;
 const MAX_LISTED_ENTRIES = 200;
@@ -251,10 +252,14 @@ async function executeTool({
   allowWrite = false,
   applyEdit,
   writeCounter,
+  allowWeb = false,
+  allowedHosts = [],
+  searchUrlTemplate,
+  fetchImpl,
 }) {
   if (!workspacePath) return refuse('no workspace folder is open.');
   const argv = name === 'run_command' ? (Array.isArray(args?.command) ? args.command : []) : [];
-  const decision = evaluate({ mode, tool: name, argv, rules, allowWrite });
+  const decision = evaluate({ mode, tool: name, argv, rules, allowWrite, allowWeb, allowedHosts });
   if (!decision.allowed) {
     audit?.({ tool: name, args, outcome: 'denied', reason: decision.reason });
     return refuse(decision.reason);
@@ -287,7 +292,9 @@ async function executeTool({
     if (writeCounter) writeCounter.count += 1;
   }
 
-  audit?.({ tool: name, args, outcome: 'allowed', reason: '' });
+  // Recorded before the call, not after: for a web tool this is the only record
+  // of what left the machine, and it must survive the request failing.
+  audit?.({ tool: name, args, outcome: isWebTool(name) ? 'transmitted' : 'allowed', reason: '' });
   switch (name) {
     case 'read_file':
       return readFileTool(workspacePath, args);
@@ -299,6 +306,10 @@ async function executeTool({
       return writeFileTool(workspacePath, args, { applyEdit });
     case 'edit_file':
       return editFileTool(workspacePath, args, { applyEdit });
+    case 'web_search':
+      return webSearchTool(args, { allowedHosts, searchUrlTemplate, fetchImpl });
+    case 'web_fetch':
+      return webFetchTool(args, { allowedHosts, fetchImpl });
     case 'run_command':
       if (argv.length === 0) return refuse('run_command needs a non-empty argv array.');
       return runCommandTool(workspacePath, argv, { spawn, env });
@@ -307,8 +318,13 @@ async function executeTool({
   }
 }
 
-function toolSchemasFor({ allowWrite = false } = {}) {
-  return allowWrite ? [...TOOL_SCHEMAS, ...WRITE_TOOL_SCHEMAS] : [...TOOL_SCHEMAS];
+function toolSchemasFor({ allowWrite = false, allowWeb = false } = {}) {
+  // A tool the model cannot use is a tool it should not be offered.
+  return [
+    ...TOOL_SCHEMAS,
+    ...(allowWrite ? WRITE_TOOL_SCHEMAS : []),
+    ...(allowWeb ? WEB_TOOL_SCHEMAS : []),
+  ];
 }
 
 module.exports = {
@@ -316,6 +332,7 @@ module.exports = {
   MAX_COMMAND_OUTPUT,
   MAX_FILE_CHARACTERS,
   TOOL_SCHEMAS,
+  WEB_TOOL_SCHEMAS,
   WRITE_TOOL_SCHEMAS,
   executeTool,
   toolSchemasFor,

@@ -157,3 +157,44 @@ test('token estimates are pessimistic, so the budget trims early rather than lat
   assert.ok(estimateTokens(text) >= 100);
   assert.equal(estimateTokens(''), estimateTokens(undefined));
 });
+
+test('history is evicted in batches so the prompt prefix stays reusable', () => {
+  const { stableTurnLimit, selectHistory } = require('../src/historyBudget');
+
+  // Under the limit nothing is dropped.
+  for (let turns = 1; turns <= 6; turns += 1) {
+    assert.equal(stableTurnLimit(turns, 6), turns);
+  }
+
+  // Past it, the oldest retained turn is what decides whether the server can
+  // reuse the prefix. Sliding by one every turn would change it every turn and
+  // force a full re-prefill of the whole history; holding it steady for a batch
+  // pays that once instead.
+  const oldestKept = (turns) => turns - stableTurnLimit(turns, 6) + 1;
+  assert.equal(oldestKept(7), 4);
+  assert.equal(oldestKept(8), 4, 'the window must not move on every turn');
+  assert.equal(oldestKept(9), 4);
+  assert.equal(oldestKept(10), 7, 'it moves once per batch');
+
+  let moves = 0;
+  let previous = oldestKept(1);
+  for (let turns = 2; turns <= 15; turns += 1) {
+    const current = oldestKept(turns);
+    if (current !== previous) moves += 1;
+    previous = current;
+  }
+  assert.equal(moves, 3, 'one-at-a-time eviction would move nine times over the same span');
+});
+
+test('batched eviction still returns whole turns starting on a user message', () => {
+  const { selectHistory } = require('../src/historyBudget');
+  const messages = [];
+  for (let turn = 1; turn <= 10; turn += 1) {
+    messages.push({ role: 'user', content: `question ${turn}` });
+    messages.push({ role: 'assistant', content: `answer ${turn}` });
+  }
+  const selected = selectHistory(messages, 100000, 6);
+  assert.equal(selected[0].role, 'user', 'history must never lead with an assistant reply');
+  assert.equal(selected.length % 2, 0, 'turns are kept whole');
+  assert.equal(selected.at(-1).content, 'answer 10', 'the most recent turn is always retained');
+});

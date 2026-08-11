@@ -49,9 +49,40 @@ function availableHistoryTokens({ contextSize, systemText, userText, maxOutputTo
  * Messages are kept whole. A truncated assistant reply reads as though the model
  * stopped mid-thought and invites it to continue something it never said.
  */
+/**
+ * How many whole turns to discard once the window is exceeded.
+ *
+ * Evicting one turn per turn looks tidy and is expensive: the prompt prefix is
+ * shared only up to the first differing message, so sliding the window by one
+ * every turn changes the prefix every turn and forces a full re-prefill of the
+ * entire history. Measured at ~170s for a 7k-token context, that penalty would
+ * arrive at turn 7 and never leave.
+ *
+ * Dropping several turns at once and then holding the window steady pays that
+ * cost once per batch instead. The information budget is the same; the cache
+ * behaviour is not.
+ */
+const EVICTION_BATCH_TURNS = 3;
+
+/**
+ * Rounds the retained turn count down to a stable step, so the window only
+ * moves when it must and then moves far enough to stay put for a while.
+ */
+function stableTurnLimit(totalTurns, maxTurns) {
+  if (totalTurns <= maxTurns) return totalTurns;
+  const overflow = totalTurns - maxTurns;
+  const batches = Math.ceil(overflow / EVICTION_BATCH_TURNS);
+  return totalTurns - batches * EVICTION_BATCH_TURNS;
+}
+
 function selectHistory(messages, budgetTokens, maxTurns) {
   if (!Array.isArray(messages) || messages.length === 0) return [];
-  const limit = Number.isFinite(maxTurns) && maxTurns >= 0 ? maxTurns * 2 : messages.length;
+  let limit = Number.isFinite(maxTurns) && maxTurns >= 0 ? maxTurns * 2 : messages.length;
+  if (limit > 0 && Number.isFinite(maxTurns)) {
+    // Turns are user/assistant pairs, so work in pairs and convert back.
+    const retained = stableTurnLimit(Math.ceil(messages.length / 2), maxTurns);
+    limit = Math.max(0, retained * 2);
+  }
   const candidates = limit > 0 ? messages.slice(-limit) : [];
   const selected = [];
   let used = 0;
@@ -72,6 +103,8 @@ function selectHistory(messages, budgetTokens, maxTurns) {
 
 module.exports = {
   CHARACTERS_PER_TOKEN,
+  EVICTION_BATCH_TURNS,
+  stableTurnLimit,
   PER_MESSAGE_TOKEN_OVERHEAD,
   availableHistoryTokens,
   estimateTokens,

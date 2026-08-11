@@ -121,7 +121,7 @@ function scoreCandidate(relativePath, content, terms, activeDirectory = '') {
 // Every tag the prompt uses to frame untrusted text must appear here. A tag
 // added to a prompt but forgotten here lets file content close its own block and
 // address the model as though it were the extension.
-const RESERVED_CONTEXT_TAGS = ['workspace_context', 'project_memory', 'editor_state', 'file', 'diagnostics'];
+const RESERVED_CONTEXT_TAGS = ['workspace_context', 'project_memory', 'editor_state', 'web_result', 'file', 'diagnostics'];
 
 function neutralizeContextMarkup(value) {
   const pattern = new RegExp(`<(/?)(${RESERVED_CONTEXT_TAGS.join('|')})(?=[\\s>])`, 'gi');
