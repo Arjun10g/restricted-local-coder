@@ -216,9 +216,21 @@ class ChatViewProvider {
       contextSize: contextOverride > 0 ? contextOverride : profile.contextSize,
       systemText,
       userText,
-      maxOutputTokens: profile.maxOutputTokens,
+      // The same number the request will use, or the reservation and the
+      // request disagree and llama-server silently drops the oldest messages.
+      maxOutputTokens: this.maxOutputTokens(profile),
     });
     return selectHistory(this.history, budget, maxTurns);
+  }
+
+  /**
+   * Output budget for one reply, which availableHistoryTokens subtracts from the
+   * context window: raising it necessarily shrinks the history that fits.
+   */
+  maxOutputTokens(profile) {
+    const override = vscode.workspace.getConfiguration('localCoder').get('chat.maxOutputTokens', 0);
+    if (Number.isFinite(override) && override > 0) return Math.floor(override);
+    return profile?.maxOutputTokens ?? 2048;
   }
 
   /**
@@ -291,10 +303,18 @@ class ChatViewProvider {
         result = await client.chatStream({
           messages,
           profile,
+          maxTokens: this.maxOutputTokens(profile),
           signal: controller.signal,
           onToken: (token) => {
             assistant += token;
             this.post({ type: 'assistantToken', id: requestId, token });
+          },
+          // Kept in its own webview channel, never appended to `assistant`.
+          // A reasoning model is silent for the whole analysis phase, which on
+          // CPU is minutes; showing nothing at all is indistinguishable from a
+          // hung server.
+          onReasoning: (token) => {
+            this.post({ type: 'assistantReasoning', id: requestId, token });
           },
         });
       } else {
@@ -302,13 +322,30 @@ class ChatViewProvider {
         // complete, so progress is reported per step instead of per token.
         result = await this.runAgentTurn({ client, messages, profile, requestId, mode: agentMode, signal: controller.signal });
       }
+      // `result.text` is the answer channel only. Reasoning is deliberately not
+      // merged in here: this value becomes lastResponse, which "Insert Last
+      // Response at Cursor" writes into the user's file, and it becomes the
+      // stored history that is replayed to the model next turn.
       assistant = result.text;
+      const thoughtOnly = !assistant.trim() && Boolean(result.reasoning?.trim());
+      if (thoughtOnly) {
+        // The token budget was spent before the answer channel opened. Say so,
+        // because an empty bubble reads as a broken install.
+        this.post({
+          type: 'assistantEmpty',
+          id: requestId,
+          message:
+            'The model spent its whole output budget thinking and never reached an answer. Its reasoning is above. Raise localCoder.chat.maxOutputTokens, or ask a narrower question.',
+        });
+      }
       this.lastResponse = assistant;
-      this.history.push(
-        { role: 'user', content: prompt },
-        { role: 'assistant', content: assistant }
-      );
-      await this.persistHistory();
+      if (assistant) {
+        this.history.push(
+          { role: 'user', content: prompt },
+          { role: 'assistant', content: assistant }
+        );
+        await this.persistHistory();
+      }
       this.post({ type: 'assistantDone', id: requestId, usage: result.usage ?? null });
       return assistant;
     } catch (error) {
@@ -415,6 +452,10 @@ class ChatViewProvider {
     .message.user .bubble { border-left: 3px solid var(--vscode-focusBorder); }
     .message.error .bubble { border-left: 3px solid var(--vscode-testing-iconFailed); color: var(--vscode-errorForeground); }
     .sources { color: var(--vscode-descriptionForeground); font-size: 10px; overflow-wrap: anywhere; }
+    .reasoning { border-left: 2px solid var(--vscode-widget-border, var(--vscode-panel-border)); }
+    .reasoning > summary { cursor: pointer; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--vscode-descriptionForeground); padding: 2px 0 2px 8px; }
+    .reasoning .thought { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--vscode-descriptionForeground); font-size: 11px; line-height: 1.4; padding: 4px 0 6px 8px; max-height: 220px; overflow-y: auto; }
+    .note { font-size: 11px; color: var(--vscode-descriptionForeground); border-left: 3px solid var(--vscode-charts-yellow); padding: 4px 8px; }
     .composer { border-top: 1px solid var(--vscode-panel-border); padding: 9px; display: grid; gap: 7px; background: var(--vscode-sideBar-background); }
     textarea { width: 100%; min-height: 76px; max-height: 230px; resize: vertical; border: 1px solid var(--vscode-input-border, transparent); border-radius: 3px; padding: 8px; color: var(--vscode-input-foreground); background: var(--vscode-input-background); font: inherit; outline: none; }
     textarea:focus { border-color: var(--vscode-focusBorder); }
@@ -541,7 +582,51 @@ class ChatViewProvider {
         }
         case 'assistantToken': {
           const element = active.get(data.id);
-          if (element) { element.bubble.textContent += data.token; scroll(); }
+          if (element) {
+            element.bubble.textContent += data.token;
+            // The answer has started, so stop drawing attention to the thinking.
+            if (element.reasoning) {
+              element.reasoning.details.open = false;
+              element.reasoning.summary.textContent = 'Thought for ' + element.reasoning.tokens + ' chunks';
+            }
+            scroll();
+          }
+          break;
+        }
+        // The model's private analysis. Rendered in its own collapsible block so
+        // there is visible progress during the minutes a CPU reasoning model
+        // spends before its first answer token -- and kept out of the bubble,
+        // which is what "Insert code" and the stored transcript read from.
+        case 'assistantReasoning': {
+          const element = active.get(data.id);
+          if (!element) break;
+          if (!element.reasoning) {
+            const details = document.createElement('details');
+            details.className = 'reasoning';
+            details.open = true;
+            const summary = document.createElement('summary');
+            summary.textContent = 'Thinking…';
+            const thought = document.createElement('div');
+            thought.className = 'thought';
+            details.append(summary, thought);
+            element.root.insertBefore(details, element.bubble);
+            element.reasoning = { details, summary, thought, tokens: 0 };
+          }
+          element.reasoning.tokens += 1;
+          element.reasoning.thought.textContent += data.token;
+          element.reasoning.thought.scrollTop = element.reasoning.thought.scrollHeight;
+          scroll();
+          break;
+        }
+        case 'assistantEmpty': {
+          const element = active.get(data.id);
+          if (!element) break;
+          element.bubble.remove();
+          const note = document.createElement('div');
+          note.className = 'note';
+          note.textContent = data.message;
+          element.root.append(note);
+          scroll();
           break;
         }
         case 'sources': {
@@ -554,8 +639,13 @@ class ChatViewProvider {
           }
           break;
         }
-        case 'assistantDone':
+        case 'assistantDone': {
+          const element = active.get(data.id);
+          if (element?.reasoning) {
+            element.reasoning.summary.textContent = 'Thought for ' + element.reasoning.tokens + ' chunks';
+          }
           active.delete(data.id); setBusy(false); prompt.focus(); break;
+        }
         case 'assistantCancelled': {
           const element = active.get(data.id);
           if (element && !element.bubble.textContent) element.bubble.textContent = '[Cancelled]';

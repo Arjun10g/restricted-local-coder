@@ -10,7 +10,7 @@
   "models": [
     {
       "id": "muse-glimmer-30b-kquant",
-      "displayName": "Muse Glimmer 30B — kquant (recommended)",
+      "displayName": "Muse Glimmer 30B \u2014 kquant (recommended)",
       "shortName": "Muse Glimmer 30B",
       "tier": "recommended",
       "baseModel": "meta-models/Muse-Glimmer-30B",
@@ -33,7 +33,7 @@
       "contextSize": 16384,
       "batchSize": 512,
       "ubatchSize": 128,
-      "maxOutputTokens": 2048,
+      "maxOutputTokens": 4096,
       "sampling": {
         "temperature": 1.0,
         "topP": 0.95,
@@ -42,6 +42,7 @@
         "repeatPenalty": 1.0
       },
       "fim": false,
+      "reasoning": true,
       "draftModel": {
         "fileName": "dflash-kquant.gguf",
         "sha256": "27d9a805fa29b943cfb6ad4843367cd4eaaaf06bd452d8cc3e00a2cd18a677bc",
@@ -51,18 +52,20 @@
         ],
         "optional": true,
         "architecture": "dflash",
-        "known_incompatible": true,
-        "note": "Different architecture (dflash) from the model it drafts for. llama.cpp refuses to create the context it needs, which fails the entire launch, so speculative decoding is off by default and the runtime retries without it if a launch fails."
+        "known_incompatible": false,
+        "note": "Different architecture (dflash) from the model it drafts for. Retested on llama.cpp b10355 on 2026-08-11: unlike b10344, the launch no longer fails -- the server logs 'dflash requires ctx_other to be set' and '[spec] failed to measure draft model memory', then loads the drafter and serves normally. It is still off by default because it buys nothing: measured 4.55 tok/s with the drafter against 4.54 tok/s without, on the same prompt and machine, while costing an extra 1.6 GiB of RAM. The failure to create the draft context indicates speculation never actually engages. Re-measure before enabling; the runtime also retries without it if a launch fails.",
+        "measuredOnTag": "b10355",
+        "measuredSpeedup": "none (4.55 vs 4.54 tok/s)"
       },
       "gpu": {
         "minVramGiB": 8,
         "fullOffloadVramGiB": 20
       },
-      "warning": "Agentic chat model with no fill-in-the-middle tokens, so inline completion stays with a Qwen profile. contextSize is set conservatively at 16384 and must be reconciled against n_ctx_train in the llama-server startup log before being raised."
+      "warning": "Agentic reasoning model with no fill-in-the-middle tokens, so inline completion stays with a Qwen profile. It streams a private analysis channel before any answer, which the chat view shows separately; that analysis is spent from maxOutputTokens, which is why the budget is 4096 rather than 2048. n_ctx_train is 131072, measured from the GGUF and confirmed on b10355, so contextSize 16384 is a memory choice, not a model limit: at 16384 the server's resident set measured about 27 GiB, which is already tight on a 32 GB machine."
     },
     {
       "id": "muse-glimmer-30b-kquant-dynamic",
-      "displayName": "Muse Glimmer 30B — kquant dynamic (quality)",
+      "displayName": "Muse Glimmer 30B \u2014 kquant dynamic (quality)",
       "shortName": "Muse Glimmer 30B dynamic",
       "tier": "quality",
       "baseModel": "meta-models/Muse-Glimmer-30B",
@@ -85,7 +88,7 @@
       "contextSize": 8192,
       "batchSize": 512,
       "ubatchSize": 128,
-      "maxOutputTokens": 2048,
+      "maxOutputTokens": 3072,
       "sampling": {
         "temperature": 1.0,
         "topP": 0.95,
@@ -94,6 +97,7 @@
         "repeatPenalty": 1.0
       },
       "fim": false,
+      "reasoning": true,
       "draftModel": {
         "fileName": "dflash-kquant.gguf",
         "sha256": "27d9a805fa29b943cfb6ad4843367cd4eaaaf06bd452d8cc3e00a2cd18a677bc",
@@ -103,18 +107,20 @@
         ],
         "optional": true,
         "architecture": "dflash",
-        "known_incompatible": true,
-        "note": "Different architecture (dflash) from the model it drafts for. llama.cpp refuses to create the context it needs, which fails the entire launch, so speculative decoding is off by default and the runtime retries without it if a launch fails."
+        "known_incompatible": false,
+        "note": "Different architecture (dflash) from the model it drafts for. Retested on llama.cpp b10355 on 2026-08-11: unlike b10344, the launch no longer fails -- the server logs 'dflash requires ctx_other to be set' and '[spec] failed to measure draft model memory', then loads the drafter and serves normally. It is still off by default because it buys nothing: measured 4.55 tok/s with the drafter against 4.54 tok/s without, on the same prompt and machine, while costing an extra 1.6 GiB of RAM. The failure to create the draft context indicates speculation never actually engages. Re-measure before enabling; the runtime also retries without it if a launch fails.",
+        "measuredOnTag": "b10355",
+        "measuredSpeedup": "none (4.55 vs 4.54 tok/s)"
       },
       "gpu": {
         "minVramGiB": 12,
         "fullOffloadVramGiB": 24
       },
-      "warning": "Larger dynamic quantization for quality comparison. At 18.3 GiB it leaves materially less headroom on a 32 GB machine; keep context at 8192 until memory has been measured."
+      "warning": "Larger dynamic quantization for quality comparison. At 18.3 GiB it leaves materially less headroom on a 32 GB machine; keep context at 8192 until memory has been measured. Reasoning model, so maxOutputTokens is 3072 -- as much as 8192 of context can reserve for output and still leave room for history."
     },
     {
       "id": "qwen3-coder-30b-a3b-iq2m",
-      "displayName": "Qwen3-Coder 30B-A3B — UD-IQ2_M (recommended)",
+      "displayName": "Qwen3-Coder 30B-A3B \u2014 UD-IQ2_M (recommended)",
       "shortName": "Qwen3-Coder 30B 2-bit",
       "tier": "recommended",
       "baseModel": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
@@ -151,7 +157,7 @@
     },
     {
       "id": "qwen3-coder-30b-a3b-tq1",
-      "displayName": "Qwen3-Coder 30B-A3B — UD-TQ1_0 (ternary, experimental)",
+      "displayName": "Qwen3-Coder 30B-A3B \u2014 UD-TQ1_0 (ternary, experimental)",
       "shortName": "Qwen3-Coder 30B ternary",
       "tier": "experimental",
       "baseModel": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
@@ -188,7 +194,7 @@
     },
     {
       "id": "qwen3-coder-30b-a3b-q4xl",
-      "displayName": "Qwen3-Coder 30B-A3B — UD-Q4_K_XL (quality-first)",
+      "displayName": "Qwen3-Coder 30B-A3B \u2014 UD-Q4_K_XL (quality-first)",
       "shortName": "Qwen3-Coder 30B 4-bit",
       "tier": "quality",
       "baseModel": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
@@ -225,7 +231,7 @@
     },
     {
       "id": "qwen3-coder-next-tq1",
-      "displayName": "Qwen3-Coder-Next 80B-A3B — UD-TQ1_0 (edge experiment)",
+      "displayName": "Qwen3-Coder-Next 80B-A3B \u2014 UD-TQ1_0 (edge experiment)",
       "shortName": "Qwen3-Coder-Next ternary",
       "tier": "edge",
       "baseModel": "Qwen/Qwen3-Coder-Next",

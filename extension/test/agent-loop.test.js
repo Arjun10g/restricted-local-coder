@@ -189,3 +189,25 @@ test('the audit log records outcomes without recording file contents', () => {
   assert.equal(summarizeArguments('run_command', { command: ['git', 'status'] }), 'git status');
   assert.ok(summarizeArguments('read_file', { path: 'x'.repeat(1000) }).length <= 310);
 });
+
+test('an answer that is all reasoning is reported, not returned as a blank reply', async (t) => {
+  // A reasoning model can spend its whole output budget on its private analysis
+  // and stop with no content and no tool call to continue from. Returning that
+  // verbatim presents an empty string to the user as a finished answer.
+  const client = {
+    async chatWithTools() {
+      return { message: { content: '' }, reasoning: 'I would need to read the file first' };
+    },
+  };
+  const result = await runAgentLoop({
+    client,
+    messages: [{ role: 'user', content: 'hi' }],
+    workspacePath: workspace(t),
+    mode: 'off',
+    rules: [],
+  });
+  assert.match(result.text, /output budget/i);
+  assert.equal(result.stoppedAtLimit, false);
+  // The analysis itself is not the answer and must not be presented as one.
+  assert.ok(!result.text.includes('read the file first'));
+});

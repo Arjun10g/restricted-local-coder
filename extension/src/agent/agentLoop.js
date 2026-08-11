@@ -68,7 +68,18 @@ async function runAgentLoop({
     const message = response?.message ?? {};
     const toolCalls = normalizeToolCalls(message);
     if (toolCalls.length === 0) {
-      return { text: String(message.content ?? ''), steps, stoppedAtLimit: false };
+      const text = String(message.content ?? '');
+      // A reasoning model can spend its entire output budget on its private
+      // analysis and return an empty answer with no tool call to continue from.
+      // Returning '' presents that as a finished, blank reply.
+      if (!text.trim() && String(response?.reasoning ?? '').trim()) {
+        return {
+          text: 'The model used its whole output budget reasoning and produced no answer. Raise localCoder.chat.maxOutputTokens, or ask a narrower question.',
+          steps,
+          stoppedAtLimit: false,
+        };
+      }
+      return { text, steps, stoppedAtLimit: false };
     }
 
     conversation.push({

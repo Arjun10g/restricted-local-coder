@@ -46,6 +46,18 @@ for (const model of manifest.models) {
   // Fill-in-the-middle is no longer universal: agentic chat models ship without
   // FIM tokens, so inline completion is driven per profile rather than assumed.
   assert.equal(typeof model.fim, 'boolean', `${model.id} must state whether it supports FIM`);
+  // Whether a model streams a separate analysis channel decides how the chat
+  // view renders it and how large an output budget it needs, so it is declared
+  // per profile rather than inferred from the model's name.
+  if ('reasoning' in model) {
+    assert.equal(typeof model.reasoning, 'boolean', `${model.id} declares reasoning but not as a boolean`);
+  }
+  if (model.reasoning === true) {
+    assert.ok(
+      model.maxOutputTokens >= 3072,
+      `${model.id} is a reasoning model, so its analysis is spent from maxOutputTokens; ${model.maxOutputTokens} is too small to reach an answer`
+    );
+  }
 
   if (model.draftModel) {
     const draft = model.draftModel;

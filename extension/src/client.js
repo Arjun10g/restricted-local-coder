@@ -33,15 +33,42 @@ async function parseErrorResponse(response) {
   );
 }
 
-function deltaText(delta) {
-  if (!delta) return '';
-  if (typeof delta.content === 'string') return delta.content;
-  if (Array.isArray(delta.content)) {
-    return delta.content
-      .map((part) => (part && typeof part.text === 'string' ? part.text : ''))
-      .join('');
+function partsText(value) {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    return value.map((part) => (part && typeof part.text === 'string' ? part.text : '')).join('');
   }
   return '';
+}
+
+function deltaText(delta) {
+  if (!delta) return '';
+  return partsText(delta.content);
+}
+
+/**
+ * The model's private analysis channel, kept strictly apart from the answer.
+ *
+ * A reasoning model streams its scratchpad as `reasoning_content` and only then
+ * opens `content`. Reading solely `content` -- which this client used to do --
+ * renders a blank bubble for the whole thinking phase, and if the token budget
+ * runs out before the answer channel opens, forever: the response then carries a
+ * full `reasoning_content` and an empty `content`, which looks exactly like a
+ * broken model.
+ *
+ * It is returned separately, never concatenated into the answer. Reasoning must
+ * not reach the editor through "Insert Last Response", must not be persisted,
+ * and must not be replayed to the model on the next turn -- feeding a model its
+ * own prior monologue spends context and degrades the reply.
+ */
+function deltaReasoning(delta) {
+  if (!delta) return '';
+  return partsText(delta.reasoning_content);
+}
+
+function messageReasoning(message) {
+  if (!message) return '';
+  return partsText(message.reasoning_content);
 }
 
 // Qwen's spelling, kept as the fallback because every fill-in-the-middle
@@ -85,7 +112,7 @@ class LlamaClient {
     return response.json();
   }
 
-  async chatStream({ messages, profile, signal, onToken, maxTokens }) {
+  async chatStream({ messages, profile, signal, onToken, onReasoning, maxTokens }) {
     throwIfAborted(signal);
     const sampling = profile?.sampling ?? {};
     const body = {
@@ -118,7 +145,24 @@ class LlamaClient {
     const decoder = new TextDecoder();
     let pending = '';
     let output = '';
+    let reasoning = '';
     let usage = null;
+
+    // Deliberately two accumulators. Appending reasoning to `output` would put
+    // the model's scratchpad into the chat history, the persisted transcript,
+    // and "Insert Last Response at Cursor" -- that is, into the user's source.
+    const consume = (delta) => {
+      const thought = deltaReasoning(delta);
+      if (thought) {
+        reasoning += thought;
+        onReasoning?.(thought, reasoning);
+      }
+      const token = deltaText(delta);
+      if (token) {
+        output += token;
+        onToken?.(token, output);
+      }
+    };
 
     while (true) {
       throwIfAborted(signal);
@@ -142,11 +186,7 @@ class LlamaClient {
           throw new LlamaHttpError(extractErrorMessage(event, 'Generation failed'), response.status, event);
         }
         usage = event.usage ?? usage;
-        const token = deltaText(event.choices?.[0]?.delta);
-        if (token) {
-          output += token;
-          onToken?.(token, output);
-        }
+        consume(event.choices?.[0]?.delta);
       }
 
       if (done) break;
@@ -156,16 +196,12 @@ class LlamaClient {
       const data = pending.trim().slice(5).trim();
       if (data && data !== '[DONE]') {
         const event = JSON.parse(data);
-        const token = deltaText(event.choices?.[0]?.delta);
-        if (token) {
-          output += token;
-          onToken?.(token, output);
-        }
+        consume(event.choices?.[0]?.delta);
         usage = event.usage ?? usage;
       }
     }
 
-    return { text: output, usage };
+    return { text: output, reasoning, usage };
   }
 
   /**
@@ -203,8 +239,12 @@ class LlamaClient {
     if (payload.error) {
       throw new LlamaHttpError(extractErrorMessage(payload, 'Tool-calling request failed'), response.status, payload);
     }
+    const message = payload.choices?.[0]?.message ?? {};
     return {
-      message: payload.choices?.[0]?.message ?? {},
+      message,
+      // Surfaced so a caller can explain an empty answer, never to be replayed
+      // to the model or shown as the answer itself.
+      reasoning: messageReasoning(message),
       usage: payload.usage ?? null,
     };
   }
@@ -269,5 +309,7 @@ module.exports = {
   LlamaClient,
   LlamaHttpError,
   buildFimPrompt,
+  deltaReasoning,
   deltaText,
+  messageReasoning,
 };

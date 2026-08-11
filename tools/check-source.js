@@ -51,6 +51,26 @@ for (const required of [
 }
 assert.ok(!runtime.includes("'0.0.0.0'"), 'Runtime source must not bind to all interfaces');
 
+// A reasoning model streams its analysis as reasoning_content and only then
+// opens content. A client that reads content alone renders nothing for the whole
+// thinking phase, and nothing at all when the token budget runs out first --
+// which is indistinguishable from a broken model, and is exactly what shipped.
+const client = fs.readFileSync(path.join(extensionRoot, 'src', 'client.js'), 'utf8');
+assert.ok(client.includes('reasoning_content'), 'client.js must read the reasoning channel, not only content');
+// Reasoning must never reach the answer: it feeds lastResponse, which is written
+// into the user's file, and the history that is replayed to the model.
+assert.ok(
+  !/output\s*\+=\s*(?:thought|reasoning)\b/.test(client),
+  'client.js must not concatenate reasoning into the answer text'
+);
+const chatView = fs.readFileSync(path.join(extensionRoot, 'src', 'chatView.js'), 'utf8');
+assert.ok(chatView.includes('onReasoning'), 'chatView.js must consume the reasoning channel so the user sees progress');
+assert.ok(
+  !/assistant\s*\+=\s*(?:thought|reasoning)\b/.test(chatView),
+  'chatView.js must not append reasoning to the assistant answer'
+);
+assert.ok(settings['localCoder.chat.maxOutputTokens'], 'localCoder.chat.maxOutputTokens is used by the chat view but not declared');
+
 const policy = fs.readFileSync(path.join(extensionRoot, 'src', 'runtimePolicy.js'), 'utf8');
 assert.ok(policy.includes('SAFE_VALUE_ARGUMENTS'), 'Runtime extras must use a strict allow-list');
 for (const protectedFlag of ['--tools', '--mcp-servers-config', '--agent', '--webui', '--hf-repo', '--cors-origins', '--rpc', '--parallel', '--cache-ram', '--log-file', '--verbose-prompt']) {

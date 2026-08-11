@@ -20,7 +20,7 @@
     .\Start-Workstation.ps1
 
 .EXAMPLE
-    .\Start-Workstation.ps1 -Version 0.3.0 -WorkDir C:\coder
+    .\Start-Workstation.ps1 -Version 0.4.0 -WorkDir C:\coder
 #>
 [CmdletBinding()]
 param(
@@ -123,7 +123,7 @@ function Write-Warn([string]$Text) { Write-Host "    $Text" -ForegroundColor Yel
 
 # Used only when the release API is unreachable. Kept equal to the packaged
 # version by tools/check-source.js.
-$FallbackVersion = '0.3.2'
+$FallbackVersion = '0.4.0'
 
 if (-not $Version) {
     try {

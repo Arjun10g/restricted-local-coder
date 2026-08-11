@@ -8,7 +8,13 @@ param(
     [int]$StartupTimeoutSeconds = 600,
     [int]$ContextSize = 4096,
     [int]$Threads = 0,
-    [int]$MaxTokens = 512,
+    # 512 scored 3/7 against the default Muse Glimmer profile, and four of the
+    # four failures returned an empty content field with finish_reason
+    # 'length': a reasoning model spends this budget on its analysis before
+    # the answer channel opens, so too small a value measures the harness
+    # rather than the model. Measured reasoning alone was 780-2318 characters
+    # per task.
+    [int]$MaxTokens = 3072,
     # Benchmarking with different acceleration settings is the point of these
     # two, since speculative decoding changes throughput but not output.
     [string]$GpuLayers = 'auto',
@@ -125,6 +131,13 @@ try {
         $Response = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$Port/v1/chat/completions" -Headers $Headers -ContentType 'application/json' -Body $Body -TimeoutSec 600
         $Stopwatch.Stop()
         $Text = [string]$Response.choices[0].message.content
+        # Never scored, only recorded. A reasoning model returns its analysis
+        # separately, and scoring it would pass tasks the answer never solved.
+        $ReasoningChars = 0
+        if ($Response.choices[0].message.PSObject.Properties.Name -contains 'reasoning_content') {
+            $ReasoningChars = ([string]$Response.choices[0].message.reasoning_content).Length
+        }
+        $FinishReason = [string]$Response.choices[0].finish_reason
         $Required = Test-Patterns -Text $Text -Patterns @($Task.mustMatch) -ExpectedMatch $true
         $Forbidden = Test-Patterns -Text $Text -Patterns @($Task.mustNotMatch) -ExpectedMatch $false
         $Passed = [bool]$Required.passed -and [bool]$Forbidden.passed
@@ -136,11 +149,16 @@ try {
             latencyMs = $Stopwatch.ElapsedMilliseconds
             promptTokens = $Response.usage.prompt_tokens
             completionTokens = $Response.usage.completion_tokens
+            reasoningChars = $ReasoningChars
+            finishReason = $FinishReason
             requiredChecks = $Required.details
             forbiddenChecks = $Forbidden.details
             response = $Text
         })
-        Write-Host ("[{0}] {1} - {2} ms" -f $(if ($Passed) { 'PASS' } else { 'FAIL' }), $Task.id, $Stopwatch.ElapsedMilliseconds)
+        Write-Host ("[{0}] {1} - {2} ms (answer {3} chars, reasoning {4} chars, {5})" -f $(if ($Passed) { 'PASS' } else { 'FAIL' }), $Task.id, $Stopwatch.ElapsedMilliseconds, $Text.Length, $ReasoningChars, $FinishReason)
+        if ($Text.Length -eq 0 -and $ReasoningChars -gt 0) {
+            Write-Host "       The model reasoned but never answered. Raise -MaxTokens." -ForegroundColor Yellow
+        }
     }
     Write-Progress -Activity 'Local coding benchmark' -Completed
 }

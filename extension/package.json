@@ -2,7 +2,7 @@
   "name": "restricted-local-coder",
   "displayName": "Restricted Local Coder",
   "description": "Self-contained local coding assistant with a bundled llama.cpp runtime and no cloud inference.",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "publisher": "restricted-local",
   "license": "MIT",
   "engines": {
@@ -436,6 +436,13 @@
           "minimum": 0,
           "maximum": 20,
           "description": "Recent user/assistant turns retained in extension memory."
+        },
+        "localCoder.chat.maxOutputTokens": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 16384,
+          "description": "Maximum tokens the model may generate for one chat reply. 0 uses the model profile's own limit. Raise this on a reasoning model: its private analysis is spent from the same budget, so a limit that is too low can be exhausted before the answer begins and the reply arrives empty. Every token added here is taken from the conversation history that fits alongside it."
         }
       }
     }

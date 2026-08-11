@@ -30,7 +30,7 @@ On a connected, governed staging machine:
 
 ```powershell
 .\scripts\New-OfflineBundle.ps1 `
-  -VsixPath .\restricted-local-coder-0.3.2-win32-x64.vsix `
+  -VsixPath .\restricted-local-coder-0.4.0-win32-x64.vsix `
   -ModelPath .\muse-glimmer-30B-kquant-17gb.gguf `
   -OutputDirectory .\offline-local-coder `
   -CreateZip
