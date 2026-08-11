@@ -23,6 +23,12 @@ jobs:
           package-manager-cache: false
       - name: Validate policy and tests
         run: npm run validate
+      # Separate from validate because it needs the network, and validate must
+      # stay runnable offline on the target workstation. A profile shipped once
+      # pointing at a file that had never been uploaded; every offline check
+      # passed it, because shape is not reachability.
+      - name: Check model downloads resolve
+        run: npm run check-models
       - name: Check JavaScript syntax
         shell: bash
         run: |

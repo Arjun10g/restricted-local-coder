@@ -176,3 +176,32 @@ Also fix: `defaultProfile` contradicts `MODEL_SELECTION.md`, and
 the **target workstation**, plus time-to-first-answer-token on one realistic
 prompt per profile. Twenty minutes, and it replaces every estimate here with a
 measurement on the hardware that matters.
+
+---
+
+## `kquant-dynamic` was withdrawn (2026-08-11)
+
+The profile is gone from the manifest. It pointed at
+`muse-glimmer-30B-kquant-dynamic.gguf` in the release bucket, and **that object
+was never uploaded** — the URL returned 404 from the day it shipped. The file was
+measured on the Shadeform instance, which is where its digest and byte count came
+from, and the instance was destroyed before the upload happened.
+
+Every offline check passed it. The entry had a well-formed URL, a 64-character
+digest, a plausible size, and `validateManifest` verifies shape rather than
+reachability. The first thing that would have caught it was a user on a
+locked-down workstation selecting the profile and getting a 404 *after* the
+extension had told them the model was available — the worst possible place to
+discover it, because that user has no fallback.
+
+`npm run check-models` now range-requests the first four bytes of every URL in
+the manifest and asserts the object exists, that Content-Range's total matches
+`expectedBytes`, and that the file starts with the GGUF magic (so an HTML error
+page served with status 200 fails too). It runs in CI, separately from
+`npm run validate`, which must stay runnable offline on the workstation itself.
+
+Withdrawing rather than re-uploading is also the right call on the merits: at
+18.3 GiB with an 8192-token context it was **larger and shorter-context** than
+`muse-glimmer-30b-kquant` (15.61 GiB, 16384), and the 5.65 bpw measurement
+recorded above means it was never the 4-bit file its name claimed. On a 32 GiB
+machine it was strictly the worse choice.

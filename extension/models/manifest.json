@@ -143,62 +143,6 @@
       "warning": "Optional deep-reasoning profile, NOT the default, because it is dense: all ~30B parameters are read for every token. Measured on a 28-core machine at 4.5 tok/s generation and 12.9 tok/s prompt processing, with 113 seconds before the first word of the answer at the model's default reasoning strength. Prompt processing is the binding constraint and it does not improve with reasoning settings, so a large workspace context makes it much worse. Choose this when answer depth matters more than latency, and set localCoder.chat.reasoningStrength to low. No fill-in-the-middle tokens, so inline completion stays with a Qwen profile. n_ctx_train is 131072; contextSize 16384 is a memory choice, measured at about 27 GiB resident.",
       "repack": false,
       "repackNote": "Repacking cost 11.4 GiB of extra resident memory for about 12% on both prompt processing and generation, so it stays off: 15.9 GiB rather than 27.3 GiB peak. The speed gain is larger here than on the default profile, so repack true is more defensible if the memory exists."
-    },
-    {
-      "id": "muse-glimmer-30b-kquant-dynamic",
-      "displayName": "Muse Glimmer 30B \u2014 kquant dynamic (quality)",
-      "shortName": "Muse Glimmer 30B dynamic",
-      "tier": "quality",
-      "baseModel": "meta-models/Muse-Glimmer-30B",
-      "quantizer": "Publisher GGUF",
-      "quantization": "kquant-dynamic (mixed K-quant)",
-      "nominalBitClass": "5-bit (5.65 bpw: mixed Q6_K/Q5_K/Q4_K)",
-      "format": "GGUF",
-      "license": "Apache-2.0",
-      "fileName": "muse-glimmer-30B-kquant-dynamic.gguf",
-      "approximateSizeGiB": 18.3,
-      "expectedBytes": 19653957984,
-      "acceptedSha256": [
-        "513109c8319115f69eb09fb7b118c97c8167d15bc014fd7670d2e30489bf106c"
-      ],
-      "downloadUrls": [
-        "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/muse-glimmer-30B-kquant-dynamic.gguf"
-      ],
-      "minimumRamGiB": 28,
-      "recommendedRamGiB": 32,
-      "contextSize": 8192,
-      "kvCacheType": "f16",
-      "batchSize": 512,
-      "ubatchSize": 128,
-      "maxOutputTokens": 3072,
-      "sampling": {
-        "temperature": 1.0,
-        "topP": 0.95,
-        "minP": 0.0,
-        "topK": 64,
-        "repeatPenalty": 1.0
-      },
-      "fim": false,
-      "reasoning": true,
-      "draftModel": {
-        "fileName": "dflash-kquant.gguf",
-        "sha256": "27d9a805fa29b943cfb6ad4843367cd4eaaaf06bd452d8cc3e00a2cd18a677bc",
-        "expectedBytes": 1631205312,
-        "downloadUrls": [
-          "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/dflash-kquant.gguf"
-        ],
-        "optional": true,
-        "architecture": "dflash",
-        "specType": "draft-dflash",
-        "blockSize": 16,
-        "note": "Meta's published DFlash drafter for this model, upstream-conformant: target_layers [2,14,26,38,50], block_size 16, mask_token_id 201818. Do not re-convert it. Two things were previously misdiagnosed here. First, 'dflash requires ctx_other to be set' is a benign warning, not an error: DFlash has no token_embd.weight and no output.weight because it borrows both from the target, so llama-server's memory-fitting probe -- which builds the draft context with no target -- always throws, and the server catches it and continues. The actual failure was the next line, 'unknown model architecture: muse-glimmer', which was the b10344 pin. Second, --model-draft ALONE DOES NOT ENABLE SPECULATION for a local file: the speculative type defaults to none and is only inferred for Hugging Face sidecar downloads, so the drafter loaded and was never used (upstream PR #26814). specType below supplies --spec-type. Verify it engaged by looking for 'adding speculative implementation' in the startup log, not by the absence of errors. MEASURED, 28-core AMD EPYC 7763, b10355, greedy so every run produced a byte-identical answer: speculation engaged, verification was lossless, and the win depends entirely on --spec-draft-n-max. At 3 it is 8.50 tok/s against a 4.17 tok/s baseline (2.04x, acceptance 0.813); at 15 it is 4.54 tok/s (1.09x, acceptance 0.354) and an outright slowdown at this profile's temperature 1.0. The reason is that a CPU verification pass costs about 157 ms of weight streaming plus 77 ms per position verified, so a 16-token block costs 5.8 single-token passes to return about 6.3 tokens. Keep the block small; upstream's own default for the flag is 3."
-      },
-      "gpu": {
-        "minVramGiB": 12,
-        "fullOffloadVramGiB": 24
-      },
-      "warning": "Larger dynamic quantization for quality comparison. At 18.3 GiB it leaves materially less headroom on a 32 GB machine; keep context at 8192 until memory has been measured. Reasoning model, so maxOutputTokens is 3072 -- as much as 8192 of context can reserve for output and still leave room for history.",
-      "repack": false
     }
   ]
 }

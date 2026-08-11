@@ -237,14 +237,12 @@
             "enum": [
               "qwen3-coder-30b-a3b-q4xl",
               "qwen3-coder-30b-a3b-iq2m",
-              "muse-glimmer-30b-kquant",
-              "muse-glimmer-30b-kquant-dynamic"
+              "muse-glimmer-30b-kquant"
             ],
             "enumDescriptions": [
               "Recommended. 3.3B-active mixture-of-experts, no reasoning phase, has fill-in-the-middle.",
               "Low-memory fallback. Smaller but not proportionally faster on CPU, and weaker on code.",
-              "Deep reasoning, dense 30B. Much slower on CPU; no fill-in-the-middle.",
-              "Deep reasoning at higher precision. Slower again, and the largest footprint here."
+              "Deep reasoning, dense 30B. Much slower on CPU; no fill-in-the-middle."
             ],
             "description": "Model profile selected from the checked-in approved manifest.",
             "order": 1
