@@ -234,6 +234,45 @@ test('repacking is off unless a profile asks for it, because it doubles resident
   assert.ok(!on.includes('--no-repack'), 'a profile may opt back in when the memory exists');
 });
 
+test('the KV cache is f16 unless a profile trades speed for memory', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'local-coder-kv-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const modelFile = path.join(directory, 'model.gguf');
+  const manager = managerWith({});
+
+  // Measured on the default profile at 8192 tokens of context: q8_0 gives
+  // 3.46 tok/s of generation and f16 gives 10.88, because a quantised cache is
+  // dequantised in full for every token generated. The 0.71 GiB f16 costs at a
+  // 16384-token context is not worth 3.1x of throughput.
+  const shipped = manager.buildArguments({ modelFile, profile: PROFILE, port: 1, threads: 4 });
+  assert.deepEqual(
+    [shipped[shipped.indexOf('--cache-type-k') + 1], shipped[shipped.indexOf('--cache-type-v') + 1]],
+    ['f16', 'f16']
+  );
+
+  const frugal = manager.buildArguments({
+    modelFile,
+    profile: { ...PROFILE, kvCacheType: 'q8_0' },
+    port: 1,
+    threads: 4,
+  });
+  assert.deepEqual(
+    [frugal[frugal.indexOf('--cache-type-k') + 1], frugal[frugal.indexOf('--cache-type-v') + 1]],
+    ['q8_0', 'q8_0'],
+    'a profile must still be able to ask for a quantised cache when memory is the constraint'
+  );
+
+  // Anything else falls back to the safe default rather than reaching the
+  // command line unvalidated.
+  const nonsense = manager.buildArguments({
+    modelFile,
+    profile: { ...PROFILE, kvCacheType: 'iq4_nl; rm -rf /' },
+    port: 1,
+    threads: 4,
+  });
+  assert.equal(nonsense[nonsense.indexOf('--cache-type-k') + 1], 'f16');
+});
+
 test('the runtime never enables a full-size sliding-window cache', () => {
   // --swa-full would give every layer a full-length KV cache and discard the
   // rolling-window saving that makes the windowed profile affordable.

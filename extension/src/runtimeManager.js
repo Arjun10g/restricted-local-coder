@@ -163,6 +163,19 @@ class RuntimeManager {
     const contextSize = contextOverride > 0 ? contextOverride : profile.contextSize;
     const promptCacheMiB = clampInteger(config.get('runtime.promptCacheMiB', 512), 0, 4096, 512);
     const extra = validateExtraArguments(config.get('runtime.extraArguments', []));
+    // The KV cache type is the single largest lever on generation at depth, and
+    // it was shipped the wrong way round. Every generated token attends over
+    // every cached position, so a quantised cache pays a dequantisation cost
+    // that grows linearly with the conversation. MEASURED on the default
+    // profile at 8192 tokens of context: 3.46 tok/s with q8_0 against 10.88
+    // tok/s with f16 -- 3.1x -- for 0.71 GiB of extra resident memory at the
+    // 16384-token context. See docs/PERFORMANCE.md, "The KV cache type is what
+    // collapses generation at depth".
+    //
+    // f16 is therefore the default. A profile may still ask for 'q8_0' when
+    // memory, not speed, is the binding constraint; nothing in the manifest
+    // does today.
+    const kvCacheType = profile.kvCacheType === 'q8_0' ? 'q8_0' : 'f16';
     return [
       '--model',
       modelFile,
@@ -188,9 +201,9 @@ class RuntimeManager {
       String(promptCacheMiB),
       '--no-cache-idle-slots',
       '--cache-type-k',
-      'q8_0',
+      kvCacheType,
       '--cache-type-v',
-      'q8_0',
+      kvCacheType,
       '--load-mode',
       'mmap',
       // Online repacking rewrites the quantised weights into a CPU-friendly

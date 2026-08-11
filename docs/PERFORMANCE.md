@@ -18,6 +18,14 @@ prefix-reuse numbers. Sections carrying those numbers say so. Because the class
 matched, every Muse Glimmer baseline was re-measured on the new box rather than
 compared across machines.
 
+A third session, on **another box of the same class again**, added the KV cache
+type sweep: "The KV cache type is what collapses generation at depth". Its
+short-prompt baseline was re-measured first and landed within 3% of the second
+session's (23.31 against 22.68 tok/s), so the two are comparable. **That session
+changed the shipped default from a `q8_0` KV cache to `f16`, so numbers taken
+before it under-report the default profile at depth by as much as 3.1×.**
+Sections written before it are annotated where that matters.
+
 **No GPU was used in any of it.** The `ubuntu-x64` release archive contains only
 `libggml-cpu-*.so`, exactly as the shipped `win-cpu-x64` archive does, so
 `--n-gpu-layers -1` was a no-op and no offload line appears in any startup log.
@@ -63,7 +71,8 @@ been run — see "Speculative decoding with DFlash, measured" below.
 |---|---:|---:|
 | generation | 22.68 tok/s | 8.50 tok/s |
 | seconds to the first word of the answer | 1.2 | 53.2 |
-| generation at ~7.2k of context | 4.01 tok/s | 3.33 tok/s |
+| generation at ~7.2k of context, as shipped then (`q8_0` KV) | 4.01 tok/s | 3.33 tok/s |
+| generation at 8192 of context, as shipped now (`f16` KV) | 10.88 tok/s | 3.98 tok/s |
 | prefill at ~7.2k of context | 24.20 tok/s | 12.32 tok/s |
 | SWE-bench Verified | 51.6 | 76.0 |
 
@@ -75,11 +84,14 @@ throughput halves a wait that was never going to be short.
 
 Two honest qualifications, because they cut against the conclusion.
 
-**At depth the models nearly converge.** By ~7.2k of context Muse Glimmer's
-generation deficit is 1.2× rather than 5.3×, and its prefill deficit 2.0× rather
-than 5.6×, because 39 of its 52 layers use a sliding window and Qwen3-Coder's 48
-are all full attention. Anyone working at long context should take the optional
-profile seriously; it is not a curiosity.
+**At depth the models nearly converge — mostly because of a bug in our own
+defaults, since fixed.** With the `q8_0` KV cache the extension used to ship,
+Muse Glimmer's generation deficit at ~7.2k was 1.2× rather than 5.3×. With the
+`f16` cache it ships now, the deficit at 8192 tokens is **2.7×** (10.88 against
+3.98 tok/s). The sliding-window advantage is real and Muse Glimmer still
+degrades far more gracefully with depth, but the convergence was largely an
+artifact of a quantised cache hurting the full-attention model much more. See
+"The KV cache type is what collapses generation at depth".
 
 **The quality difference was not measured here.** 76.0 against 51.6 is the
 publishers' number, not ours, and this repository's benchmark is a regex screen
@@ -170,6 +182,13 @@ Flash attention on is **slightly faster** for prefill at both thread counts and
 neutral for generation. On this build and this hardware the claim is false, and
 `--flash-attn auto` is kept unchanged.
 
+The "neutral for generation" half of that has since been narrowed: `llama-bench`
+runs at a trivial context depth, where attention has almost nothing to do. At
+8192 tokens of context flash attention is worth **+34% of generation** (10.88
+against 8.10 tok/s). See "It is not flash attention" below. The conclusion —
+leave `--flash-attn auto` alone — is unchanged and now rests on a better
+measurement.
+
 Also visible in that table: prefill scales with cores (+46% from 14 to 28) while
 generation does not move. **Untested here:** whether simultaneous multithreading
 hurts. This machine reports one thread per core, so there were no logical cores
@@ -252,6 +271,230 @@ long-context work. The unfavourable one: **Qwen3-Coder's own generation falls to
 4.01 tok/s at 7.2k**, which is below the comfortable-chat floor. Depth hurts the
 default profile far more than it hurts the optional one, and that is an argument
 for keeping the context budget small — not an argument for changing models.
+
+> **Superseded in part by the next section.** Every number above was taken with
+> a `q8_0` KV cache, which is what the extension shipped at the time. That was
+> the wrong default: the cache is dequantised in full for every token generated,
+> and it was costing the default profile 3.1× of its generation at 8192 tokens.
+> With `f16` the same depth gives 10.88 tok/s rather than 3.46, the convergence
+> with Muse Glimmer mostly disappears, and Qwen3-Coder is back above the chat
+> floor at workspace depth. The depth *shapes* here are real; the *levels* for
+> the default profile are not what the extension does now.
+
+## The KV cache type is what collapses generation at depth
+
+**Third measurement session, same machine class as the second**: a rented AMD
+EPYC 7763, 2 sockets, 14 cores each, **28 physical cores with no SMT**, 56 GB
+RAM, Ubuntu 22.04, `llama-server` b10355 (`dd1ea5243`), CPU-only, no GPU offload.
+Both models were verified against their manifest SHA-256 before the run. The
+argv is the one `RuntimeManager.buildArguments` produces; only the KV flags
+change. Requests go to the native `/completion` endpoint, greedy (`temperature 0`,
+`top_k 1`, fixed seed), `n_predict 64`, three repetitions per cell, and every
+number is `llama-server`'s own `timings` block rather than a wall clock.
+
+The prompt is this repository's own JavaScript sources, so the depths are
+prefix-nested: depth 4096 is depth 2048 plus more of the same files. That is
+what an agent loop does, and it means each rung's prefill figure is for the
+**increment** that takes the context from the previous rung to this one, not for
+a cold prefill of the whole prompt.
+
+### The question
+
+Generation on the default profile falls from 22.68 tok/s on a short prompt to
+4.01 tok/s at ~7.2k of context — measured in the second session, reproduced
+here. Bandwidth does not explain it. Qwen3-Coder is a mixture of experts reading
+about 3.3B of 30.5B parameters per token, so 16.48 GiB × (3.3/30.5) = 1.78 GiB
+of weights per token; the q8_0 KV cache at 7.2k adds 48 layers × 2 × 4 KV heads
+× 128 head_dim × 1.0625 bytes = 0.35 GiB. Bytes per token rise about 20%, which
+predicts roughly 19 tok/s. Roughly **4× was unaccounted for**, so it had to be
+compute rather than memory.
+
+### The answer: it is the quantised cache, and K is where the cost lives
+
+Generation, tok/s, mean of three repetitions, default profile, `--ctx-size 16384`:
+
+| context depth | `q8_0`/`q8_0` (was shipped) | `q8_0`/`f16` | `f16`/`f16` (now shipped) |
+|---:|---:|---:|---:|
+| 130 | 18.76 | 18.50 | 19.36 |
+| 2048 | 9.91 (−47%) | 11.23 (−39%) | 16.38 (−15%) |
+| 4096 | 6.37 (−66%) | 8.06 (−56%) | 14.38 (−26%) |
+| **8192** | **3.46 (−82%)** | **4.96 (−73%)** | **10.88 (−44%)** |
+| 14336 | 2.17 (−88%) | 2.98 (−84%) | 6.86 (−65%) |
+| **peak RSS** | **17.39 GiB** | **17.74 GiB** | **18.10 GiB** |
+
+**f16 KV is 3.1× faster at 8192 tokens of context and 3.2× at 14336, for 0.71
+GiB of resident memory.** The hypothesis was right: on a CPU every generated
+token attends over every cached position and dequantises it, so the cost of a
+quantised cache grows linearly with depth while the memory it saves stays
+trivial. At the shipped 16384-token context the arithmetic is 48 layers × 2 ×
+4 KV heads × 128 head_dim × 16384 positions: 1.50 GiB at f16 against 0.80 GiB at
+q8_0, a difference of 0.70 GiB, which is the 0.71 GiB the process actually grew
+by. We were spending two thirds of our generation throughput to save 0.7 GiB on
+a profile whose stated minimum is 24 GB of RAM.
+
+Prefill moves the same way, which was not predicted:
+
+| context depth | pp with `q8_0`/`q8_0` | pp with `f16`/`f16` |
+|---:|---:|---:|
+| 130 | 87.37 | 91.30 |
+| 2048 | 58.33 | 68.99 |
+| 4096 | 33.01 | 44.35 |
+| 8192 | 19.66 | 29.22 |
+| 14336 | 11.79 | 17.90 |
+
+**+49% of prefill at 8192 and +52% at 14336.** Prefill is the cost that
+dominates this extension, so this is not a secondary benefit.
+
+**K is the expensive half, and it is not close.** At 8192 the whole gap is
+10.88 − 3.46 = 7.42 tok/s. Quantising K alone (`q8_0`/`f16`, 4.96) costs 5.92 of
+that — **80% of the damage from half the cache**. Quantising V as well costs the
+remaining 1.50. The intuition that "K is far more sensitive to quantisation than
+V" is normally made about accuracy; on a CPU it is also true of speed, by a wide
+margin. The half-measure of keeping `q8_0` K and paying f16 only for V — which
+looked attractive because V at this GQA ratio is nearly free — recovers a fifth
+of what is available and is not worth having.
+
+### It is not flash attention, and this is the first run where that could be asked
+
+Quantised V forces flash attention on unconditionally — `--flash-attn auto`
+never actually probes when V is quantised (`llama-context.cpp:3580-3589`), and
+`--flash-attn off` with a quantised V is a hard error. So every measurement this
+project has ever taken ran with flash attention on, and the f16 runs above are
+the first where the question is even legal. If the recovery were really the
+flash-attention path rather than dequantisation, `-fa off` would be the fix and
+the manifest change would be a different one.
+
+It is not. `f16`/`f16`, one variable — flash attention:
+
+| | `-fa auto` (resolves to on) | `-fa off` |
+|---|---:|---:|
+| generation @ 130 | 19.36 | **22.48** |
+| generation @ 8192 | **10.88** | 8.10 |
+
+Flash attention **on** is worth +34% of generation at 8192 and costs 14% on a
+short prompt. The depth recovery is therefore entirely attributable to the cache
+type, and `--flash-attn auto` stays as it is: it makes the right call at the
+depths that hurt. (The short-prompt row also refutes a smaller earlier claim, in
+"Flash attention: measured" above, that flash attention is neutral for
+generation — that measurement was taken at `llama-bench`'s trivial depth, where
+there is nothing for it to be good at.)
+
+### Speculative decoding attacks the same cost, and therefore does not stack
+
+If dequantisation per generated token is the problem, block verification should
+help, because it dequantises the cache once per verify batch rather than once
+per token. b10355 ships a draftless prompt-lookup decoder that needs no second
+model, which suits an agent loop where tool results and edited files are
+restated verbatim: `--spec-type ngram-mod --spec-ngram-mod-n-match 16
+--spec-ngram-mod-n-min 8 --spec-ngram-mod-n-max 24`.
+
+Generation tok/s, mean of three, with the per-repetition values because the
+spread is the finding:
+
+| | @130 | @8192 |
+|---|---|---|
+| `q8_0` KV, no speculation | 18.76 | 3.46 |
+| `q8_0` KV, ngram-mod | 28.86 `[22.3, 20.3, 44.0]` | 7.23 `[5.4, 5.4, 10.9]` |
+| `f16` KV, no speculation | 19.36 | 10.88 |
+| `f16` KV, ngram-mod | 31.45 `[20.3, 27.8, 46.2]` | 10.97 `[8.5, 11.8, 12.7]` |
+
+Acceptance over the three repetitions was 52 of 96 drafted tokens on `q8_0` at
+depth and 113 of 153 on `f16`.
+
+Two things, and the second is the interesting one.
+
+**Speculation is a real second fix for the quantised cache.** On `q8_0` it
+doubles generation at depth on average, and its best repetition — 10.88 tok/s,
+with 48 of 48 drafted tokens accepted — lands exactly on the f16 baseline. That
+is the amortisation argument confirmed: when a whole block is verified in one
+pass, the cache is read once for four or five tokens instead of once each.
+
+**On top of f16 it buys almost nothing on average** (10.97 against 10.88),
+because the cost it was amortising is no longer there. The two fixes are not
+additive; they are two ways of paying the same bill.
+
+The variance is the reason speculation is not being enabled by default. Every
+repetition here is byte-identical greedy output over an identical prompt, and
+the numbers still range from 5.4 to 10.9 tok/s at depth, because the ngram
+lookup warms up across requests within a server run. A configuration whose
+throughput doubles depending on what the slot happened to see before it is not
+one to ship without a much wider test, and the f16 cache gets the same result
+deterministically. Acceptance was lossless where it engaged.
+
+### Muse Glimmer barely notices, which is the confirmation
+
+Muse Glimmer has 16:1 GQA and a 2048-token sliding window on 39 of its 52
+layers, so its KV cache is small and most of it never grows. If the collapse is
+really the cost of reading and dequantising the cache, Muse Glimmer should show
+the same effect in miniature. It does. Generation tok/s, mean of three, same
+machine and argv:
+
+| context depth | `q8_0`/`q8_0` | `f16`/`f16` |
+|---:|---:|---:|
+| 130 | 3.99 | 4.18 |
+| 2048 | 3.74 | 4.07 |
+| 4096 | 3.54 | 3.91 |
+| **8192** | **3.30 (−17%)** | **3.98 (−5%)** |
+| peak RSS | 16.02 GiB | 16.23 GiB |
+
+f16 is worth **+21% at 8192** here rather than +215%, and costs 0.21 GiB rather
+than 0.71 GiB. Both numbers are small for the same reason, and that reason is
+the mechanism: a cache that barely grows with depth cannot cost much to
+dequantise per token, and cannot cost much to hold. Prefill moves the same
+small amount, 11.97 → 12.88 tok/s at 8192. The earlier measurement of Muse
+Glimmer's shallow depth curve (4.29 → 3.33 tok/s to ~7.2k) reproduces here at
+3.99 → 3.30.
+
+The `f16` column is flat rather than merely shallow, and 8192 (3.98) is very
+slightly above 4096 (3.91) — outside the 0.01–0.06 spread of the repetitions, so
+it is not noise. That is what a 2048-token sliding window on 39 of 52 layers
+predicts: past the window most of the model's per-token attention cost stops
+growing entirely, and only the 13 full-attention layers keep paying. With `f16`
+those 13 layers are cheap enough that the curve flattens; with `q8_0` their
+dequantisation is still enough to bend it.
+
+One more Muse Glimmer cell, because the amortisation argument predicts it:
+**DFlash speculation gets better with depth, not worse.** `q8_0` KV,
+`--spec-type draft-dflash --spec-draft-n-max 3`, engagement confirmed in the log
+("adding speculative implementation 'draft-dflash'"):
+
+| context depth | no drafter | DFlash n-max 3 | acceptance |
+|---:|---:|---:|---:|
+| 130 | 3.99 | 5.19 (1.30×) | 0.35 |
+| 8192 | 3.30 | **5.44 (1.65×)** | 0.58 |
+
+The speed-up *grows* with depth — 1.30× to 1.65× — while every other
+configuration in this document gets worse. That is the same mechanism as the
+`f16` result seen from the other side: a verify batch reads the cache once for
+several tokens, so the deeper the context the more there is to amortise. Note
+this is a smaller short-prompt win than the 2.04× recorded in "Speculative
+decoding with DFlash" below; that measurement was a chat task and this one is a
+raw code completion, and DFlash acceptance depends heavily on what is being
+written. `f16` KV and DFlash were not measured together on Muse Glimmer.
+
+**This changes the model comparison at depth, and against Muse Glimmer.** The
+second session concluded that "at depth the models nearly converge" — 4.01
+against 3.33 tok/s at ~7.2k, a 1.2× gap — and that this made Muse Glimmer a
+defensible choice for long-context work. That convergence was mostly an artifact
+of the cache type crippling the MoE profile. With the cache fixed, at 8192
+tokens the default profile generates at 10.88 tok/s against Muse Glimmer's
+3.98: **the gap is 2.7×, not 1.2×**, and Qwen3-Coder is back above the
+comfortable-chat floor at a realistic workspace depth while Muse Glimmer is not.
+The argument for Muse Glimmer is still answer quality, and it is still not
+throughput at depth.
+
+### What changed as a result
+
+`RuntimeManager.buildArguments` now emits `--cache-type-k f16 --cache-type-v
+f16` by default. A manifest profile may set `kvCacheType: "q8_0"` to trade the
+throughput back for 0.71 GiB; no shipped profile does.
+
+`tools/check-source.js` used to assert the literal `'q8_0'` appeared in the
+runtime source, which was a gate written to stop the cache silently growing.
+That gate has been changed deliberately: it now asserts that both cache types
+are still spelled explicitly on the command line, so neither can drift to an
+upstream default, and the comment there records why the original assertion was
+wrong.
 
 ## Speculative decoding with DFlash, measured
 
@@ -559,23 +802,29 @@ The extension therefore starts conservatively:
 3. Do **not** lower `localCoder.runtime.contextSize` to save memory. Measured, it
    does almost nothing (see the table above); it only shortens the conversation.
 4. Keep `localCoder.runtime.promptCacheMiB` at `512`, or set it to `0` to disable prompt caching entirely.
-5. Set threads to the physical-core count. Prefill scales with cores; generation
+5. Leave the KV cache at `f16`. A profile can set `kvCacheType: "q8_0"` and it
+   saves 0.71 GiB on the default profile, but it costs 3.1× of generation and
+   about a third of prefill at 8192 tokens of context, because a quantised
+   cache is dequantised in full for every token generated. Only reach for it if
+   the machine genuinely cannot hold the extra 0.7 GiB, and expect the tool to
+   feel much worse in long conversations.
+6. Set threads to the physical-core count. Prefill scales with cores; generation
    does not, so there is nothing to gain past that and contention to lose.
-6. Disable inline completions during long chat work.
-7. Prefer the 4-bit `Q4_K_XL` profile. Going below about 4 bits per weight buys
+7. Disable inline completions during long chat work.
+8. Prefer the 4-bit `Q4_K_XL` profile. Going below about 4 bits per weight buys
    file size but not proportional speed on a CPU, because dequantisation cost
    rises as the byte count falls, and it measurably costs code correctness. The
    two "TQ1" profiles were removed in 0.5.0: their GGUF headers declared
    `IQ1_S`, contained no ternary tensors at all, and the name was a publisher
    labelling choice rather than a format.
 
-8. Keep the workspace context **stable and ahead of the conversation history**,
+9. Keep the workspace context **stable and ahead of the conversation history**,
    so every turn after the first is a pure append. Measured, this is the single
    largest lever in this document: 2.1 s instead of 247 s on the default
    profile, 2.6 s instead of 571 s on Muse Glimmer. Nothing in the runtime can
    substitute for it — `--cache-reuse` and `--ctx-checkpoints` were both
    measured as no-ops once the prefix has changed.
-9. On the Muse Glimmer profile only, leave `localCoder.runtime.draftMaxTokens`
+10. On the Muse Glimmer profile only, leave `localCoder.runtime.draftMaxTokens`
    at its default of `3`. Raising it toward the drafter's 15-slot ceiling is a
    measured loss on a CPU.
 
@@ -605,17 +854,22 @@ Commonly cited floors for this kind of tool are roughly 10 tok/s for chat to
 feel live, 30–40 tok/s for code generation, and 40–60+ decode with 150–300+
 prefill for agentic work. Against those, on a 28-core server chip:
 
-| | Qwen3-Coder, short prompt | Qwen3-Coder, ~7.2k context | Muse Glimmer, best config |
+| | Qwen3-Coder, short prompt | Qwen3-Coder, 8192 of context | Muse Glimmer, best config |
 |---|---:|---:|---:|
-| generation | 22.68 | 4.01 | 8.50 |
-| prefill | 87.63 (pp512) | 24.20 | 20.32 (pp512) |
+| generation | 22.68 | 10.88 | 8.50 |
+| prefill | 87.63 (pp512) | 29.22 | 20.32 (pp512) |
+
+The depth column is the `f16` KV cache the extension now ships. With the `q8_0`
+cache it shipped until that was measured, the same column read 3.46 and 19.66.
 
 **On a short prompt the default profile clears the chat floor and nothing else.**
 It is roughly half of what comfortable code generation wants and well under a
 tenth of what agentic work wants on prefill.
 
-**At a realistic workspace depth it does not clear the chat floor either**, at
-4.01 tok/s — unless every turn after the first is a pure append, in which case
+**At a realistic workspace depth it now just clears the chat floor**, at 10.88
+tok/s against a floor of about 10 — which it did not before the KV cache type
+was fixed, at 3.46. Prefill at that depth remains the binding cost — unless
+every turn after the first is a pure append, in which case
 the prefill is paid once and generation is what is left. That is why the context
 structure matters more than any tuning in this file.
 
@@ -674,8 +928,15 @@ actionable:
 
 - **Prompt processing.** 12.9 tok/s against a generation rate of 4.45 is a ratio
   of 2.9×, where a dense model of this size should show 5–20×.
-- **The depth collapse.** The MoE default drops from 22.68 tok/s on a short
-  prompt to 4.01 at ~7.2k context, where bandwidth arithmetic predicts ~19.
+- ~~**The depth collapse.**~~ **Found and mostly fixed.** The MoE default dropped
+  from 22.68 tok/s on a short prompt to 4.01 at ~7.2k context, where bandwidth
+  arithmetic predicts ~19. It was the `q8_0` KV cache: a quantised cache is
+  dequantised in full for every token generated, so the cost grew linearly with
+  depth while the memory it saved stayed trivial. `f16` gives 10.88 tok/s at
+  8192 tokens against 3.46, and +49% of prefill there, for 0.71 GiB. It is now
+  the default. What remains unrecovered — 19 predicted against 10.88 measured —
+  is attention arithmetic itself, and it is a much smaller gap than the one that
+  was there. See "The KV cache type is what collapses generation at depth".
 - **MoE gather efficiency.** The default reads 1.78 GiB of active weights per
   token, which at 22.68 tok/s is only ~40 GiB/s of the 75–105 the same box
   sustains on a dense model — scattered expert reads rather than a stream.

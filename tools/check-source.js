@@ -35,6 +35,17 @@ for (const required of [
   "'--no-agent'",
   "'--offline'",
   "'--cors-origins'",
+  // This used to be a bare "'q8_0'", asserting that the KV cache shipped
+  // quantised. That gate was written to stop the cache silently growing, and it
+  // was measured to be wrong: on a CPU every generated token dequantises the
+  // whole cache, so q8_0 cost 3.1x of generation throughput at 8192 tokens of
+  // context (3.46 vs 10.88 tok/s) to save 0.71 GiB. The default is now f16 and
+  // the gate asserts what actually matters -- that both cache types are still
+  // spelled explicitly on the command line, so neither can be left to a
+  // runtime default that upstream may change. See docs/PERFORMANCE.md.
+  "'--cache-type-k'",
+  "'--cache-type-v'",
+  "'f16'",
   "'q8_0'",
   "'--parallel'",
   "'--cache-ram'",

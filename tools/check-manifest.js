@@ -42,6 +42,14 @@ for (const model of manifest.models) {
   assert.ok(model.minimumRamGiB >= 16 && model.recommendedRamGiB >= model.minimumRamGiB);
   assert.ok(model.contextSize >= 2048 && model.contextSize <= 32768, `${model.id} has an unsafe default context`);
   assert.ok(model.batchSize >= model.ubatchSize);
+  // A quantised KV cache is dequantised in full for every token generated, so
+  // it costs throughput that grows with context depth: measured at 3.1x on the
+  // default profile at 8192 tokens, to save 0.71 GiB. Only these two values are
+  // understood by the runtime, and anything else silently becomes f16.
+  assert.ok(
+    ['f16', 'q8_0'].includes(model.kvCacheType),
+    `${model.id} must declare kvCacheType as "f16" or "q8_0"`
+  );
   assert.ok(model.maxOutputTokens > 0);
   // Fill-in-the-middle is no longer universal: agentic chat models ship without
   // FIM tokens, so inline completion is driven per profile rather than assumed.

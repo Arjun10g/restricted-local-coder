@@ -70,8 +70,8 @@ child environment: LLAMA_API_KEY=<random SecretStorage value>
 --parallel 1
 --cache-ram <bounded setting; 512 MiB by default>
 --no-cache-idle-slots
---cache-type-k q8_0
---cache-type-v q8_0
+--cache-type-k <f16, or the profile's kvCacheType>
+--cache-type-v <same>
 --load-mode mmap
 --flash-attn auto
 --n-gpu-layers <-1 for auto, a pinned count, or the flag omitted when "off">
@@ -86,6 +86,12 @@ child environment: LLAMA_API_KEY=<random SecretStorage value>
 --no-cors-credentials
 --no-slots
 ```
+
+The KV cache is `f16` and a manifest profile may set `kvCacheType: "q8_0"` to
+trade throughput for memory. It shipped as `q8_0` until that was measured: a
+quantised cache is dequantised in full for every token generated, so it cost
+3.1x of generation and about a third of prefill at 8192 tokens of context to
+save 0.71 GiB. See docs/PERFORMANCE.md.
 
 The three acceleration flags are all conditional and all degrade rather than fail:
 
