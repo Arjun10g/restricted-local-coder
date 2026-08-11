@@ -178,7 +178,10 @@ test('speculative decoding is opt-in, since a bad pairing fails the whole launch
   // The drafter published for the default profile is a different architecture
   // (dflash) from the model it drafts for, and llama.cpp refuses the context it
   // needs. Defaulting this on made a working model look broken.
-  const declared = require('../package.json').contributes.configuration.properties;
+  const declared = Object.assign(
+    {},
+    ...[require('../package.json').contributes.configuration].flat().map((block) => block.properties)
+  );
   assert.equal(declared['localCoder.runtime.enableDraftModel'].default, false);
 });
 

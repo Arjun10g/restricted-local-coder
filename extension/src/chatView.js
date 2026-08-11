@@ -102,6 +102,12 @@ class ChatViewProvider {
     });
     this.postStatus(this.runtime.snapshot());
     this.postModel();
+    this.postCapabilities();
+    this.context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration('localCoder')) this.postCapabilities();
+      })
+    );
     void this.restoreHistory();
   }
 
@@ -131,12 +137,47 @@ class ChatViewProvider {
     });
   }
 
+  /**
+   * What the extension can currently do, as opposed to what it could do when
+   * shipped.
+   *
+   * The panel used to state flatly that the model "cannot run shell commands or
+   * edit files" and that there is "no cloud fallback". Agent mode and web access
+   * made both of those conditionally false, and a privacy claim that is false in
+   * some configurations is worse than no claim at all -- it is the configurations
+   * where it is false that a user most needs to know about. So the strip is
+   * derived from settings on every read rather than written into the markup.
+   */
+  postCapabilities() {
+    const config = vscode.workspace.getConfiguration('localCoder');
+    const mode = String(config.get('agent.mode') ?? 'off');
+    const hosts = config.get('web.allowedHosts') ?? [];
+    const webOn = config.get('web.enabled') === true && Array.isArray(hosts) && hosts.length > 0;
+    this.post({
+      type: 'capabilities',
+      capabilities: {
+        agentMode: mode,
+        canRunCommands: mode !== 'off' && mode !== 'readonly',
+        canEditFiles: mode !== 'off' && mode !== 'readonly' && config.get('agent.allowWrite') === true,
+        webEnabled: webOn,
+        webHostCount: webOn ? hosts.length : 0,
+      },
+    });
+  }
+
   async handleMessage(message) {
     if (!message || typeof message !== 'object') return;
     switch (message.type) {
       case 'ready':
         this.postStatus();
         this.postModel();
+        this.postCapabilities();
+        break;
+      case 'settings':
+        await vscode.commands.executeCommand(
+          'workbench.action.openSettings',
+          '@ext:restricted-local.restricted-local-coder'
+        );
         break;
       case 'send': {
         const prompt = String(message.prompt ?? '').trim();
@@ -191,6 +232,7 @@ class ChatViewProvider {
             { label: '$(cloud-download) Download or repair model', command: 'localCoder.downloadModel' },
             { label: '$(folder-opened) Import approved GGUF', command: 'localCoder.importModel' },
             { label: '$(checklist) Run preflight', command: 'localCoder.preflight' },
+            { label: '$(gear) Open settings', command: 'localCoder.openSettings' },
           ],
           { title: 'Restricted Local Coder setup' }
         );
@@ -586,7 +628,11 @@ class ChatViewProvider {
     textarea:focus { border-color: var(--vscode-focusBorder); }
     .composer-actions { display: flex; justify-content: space-between; gap: 8px; }
     .left, .right { display: flex; gap: 5px; }
-    .privacy { font-size: 10px; color: var(--vscode-descriptionForeground); padding: 0 1px; }
+    .privacy { font-size: 10px; color: var(--vscode-descriptionForeground); padding: 0 1px; display: flex; flex-wrap: wrap; gap: 4px 0; }
+    /* Separators are drawn rather than typed so no capability can inject one. */
+    .cap + .cap::before { content: '·'; margin: 0 5px; opacity: 0.6; }
+    .cap.warn { color: var(--vscode-editorWarning-foreground); }
+    .cap.alert { color: var(--vscode-editorError-foreground); font-weight: 600; }
   </style>
 </head>
 <body>
@@ -607,15 +653,16 @@ class ChatViewProvider {
           <button id="start" title="Start local runtime">Start</button>
           <button id="stop" title="Stop local runtime">Stop</button>
           <button id="more" title="Model and preflight actions">Setup</button>
+          <button id="settings" title="Open Local Coder settings">Settings</button>
         </div>
       </div>
     </header>
     <main class="messages" id="messages">
-      <div class="empty" id="empty"><strong>Your code stays local.</strong>Ask about the active project, or select code and use the editor’s Local Coder commands. The model cannot run shell commands or edit files autonomously.</div>
+      <div class="empty" id="empty"><strong>Your code stays local.</strong>Ask about the active project, or select code and use the editor’s Local Coder commands. The strip below the input says what this extension is currently allowed to do.</div>
     </main>
     <section class="composer">
       <textarea id="prompt" aria-label="Message" placeholder="Ask about the active codebase…"></textarea>
-      <div class="privacy">Local loopback inference · bounded workspace context · no cloud fallback</div>
+      <div class="privacy" id="capabilities">Local loopback inference · bounded workspace context</div>
       <div class="composer-actions">
         <div class="left">
           <button id="clear">Clear</button>
@@ -681,6 +728,7 @@ class ChatViewProvider {
     document.getElementById('start').addEventListener('click', () => post('start'));
     document.getElementById('stop').addEventListener('click', () => post('stop'));
     document.getElementById('more').addEventListener('click', setupMenu);
+    document.getElementById('settings').addEventListener('click', () => post('settings'));
     document.getElementById('clear').addEventListener('click', () => post('clear'));
     document.getElementById('insert').addEventListener('click', () => post('insert'));
 
@@ -691,6 +739,30 @@ class ChatViewProvider {
           status.textContent = data.status.detail || data.status.state;
           dot.className = 'dot ' + data.status.state;
           break;
+        case 'capabilities': {
+          const strip = document.getElementById('capabilities');
+          if (!strip) break;
+          const capability = data.capabilities || {};
+          strip.textContent = '';
+          const add = (text, kind) => {
+            const span = document.createElement('span');
+            span.className = 'cap' + (kind ? ' ' + kind : '');
+            span.textContent = text;
+            strip.append(span);
+          };
+          add('Local inference');
+          add('bounded workspace context');
+          if (capability.canRunCommands) add('runs commands (' + capability.agentMode + ')', 'warn');
+          if (capability.canEditFiles) add('edits files', 'warn');
+          // Web access is the only thing here that sends anything off the
+          // machine, so it is the one that gets the strongest treatment.
+          if (capability.webEnabled) {
+            add('sends web requests to ' + capability.webHostCount + ' approved host' + (capability.webHostCount === 1 ? '' : 's'), 'alert');
+          } else {
+            add('nothing leaves this machine');
+          }
+          break;
+        }
         case 'model':
           model.textContent = data.model.name + ' · ' + data.model.quantization + ' · ~' + data.model.size + ' GiB';
           model.title = data.model.warning || '';

@@ -106,6 +106,12 @@ async function activate(context) {
     }
   }, output);
   register(context, 'localCoder.preflight', () => runPreflight(context, models), output);
+  register(
+    context,
+    'localCoder.openSettings',
+    () => vscode.commands.executeCommand('workbench.action.openSettings', '@ext:restricted-local.restricted-local-coder'),
+    output
+  );
   register(context, 'localCoder.askSelection', () => chat.runSelectionAction('ask'), output);
   register(context, 'localCoder.explainSelection', () => chat.runSelectionAction('explain'), output);
   register(context, 'localCoder.reviewSelection', () => chat.runSelectionAction('review'), output);

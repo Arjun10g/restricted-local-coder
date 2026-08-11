@@ -12,7 +12,19 @@ assert.equal(packageJson.main, './src/extension.js');
 assert.ok(!packageJson.dependencies || Object.keys(packageJson.dependencies).length === 0, 'Runtime npm dependencies are not allowed');
 assert.ok(!packageJson.extensionDependencies, 'Cloud/helper extension dependencies are not allowed');
 assert.equal(packageJson.capabilities?.untrustedWorkspaces?.supported, false);
-const settings = packageJson.contributes?.configuration?.properties ?? {};
+// Settings are declared as an array of titled blocks so the Settings UI shows
+// sections rather than one flat list of 34 items. Flatten before checking, and
+// fail loudly on a duplicate key: two blocks declaring the same setting would
+// have one silently win in VS Code, and a default asserted here could be the
+// losing copy.
+const settingBlocks = [packageJson.contributes?.configuration ?? {}].flat();
+const settings = {};
+for (const block of settingBlocks) {
+  for (const [key, value] of Object.entries(block.properties ?? {})) {
+    assert.ok(!(key in settings), `setting ${key} is declared in more than one configuration block`);
+    settings[key] = value;
+  }
+}
 assert.ok(settings['localCoder.runtime.promptCacheMiB'], 'Bounded prompt-cache setting is missing');
 assert.ok(!settings['localCoder.download.verifySha256'], 'Model hash verification must not be user-disableable');
 // Flags the runtime passes must be reachable from the Settings UI, or a user has

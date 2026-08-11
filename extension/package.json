@@ -154,6 +154,11 @@
         "command": "localCoder.showAgentAudit",
         "title": "Local Coder: Show Agent Audit Log",
         "icon": "$(list-flat)"
+      },
+      {
+        "command": "localCoder.openSettings",
+        "title": "Open Settings",
+        "category": "Local Coder"
       }
     ],
     "viewsContainers": {
@@ -221,269 +226,342 @@
         }
       ]
     },
-    "configuration": {
-      "title": "Restricted Local Coder",
-      "properties": {
-        "localCoder.modelProfile": {
-          "type": "string",
-          "default": "qwen3-coder-30b-a3b-q4xl",
-          "enum": [
-            "qwen3-coder-30b-a3b-q4xl",
-            "qwen3-coder-30b-a3b-iq2m",
-            "muse-glimmer-30b-kquant",
-            "muse-glimmer-30b-kquant-dynamic"
-          ],
-          "enumDescriptions": [
-            "Recommended. 3.3B-active mixture-of-experts, no reasoning phase, has fill-in-the-middle.",
-            "Low-memory fallback. Smaller but not proportionally faster on CPU, and weaker on code.",
-            "Deep reasoning, dense 30B. Much slower on CPU; no fill-in-the-middle.",
-            "Deep reasoning at higher precision. Slower again, and the largest footprint here."
-          ],
-          "description": "Model profile selected from the checked-in approved manifest."
-        },
-        "localCoder.modelDirectory": {
-          "type": "string",
-          "default": "",
-          "description": "Directory for GGUF files. Empty uses a user-level LocalCoder models directory."
-        },
-        "localCoder.modelMirrorBaseUrl": {
-          "type": "string",
-          "default": "",
-          "description": "Approved internal HTTPS base URL. The model file name is appended before public sources are tried."
-        },
-        "localCoder.network.allowPublicModelDownload": {
-          "type": "boolean",
-          "default": true,
-          "description": "Allow direct download from non-Hugging-Face public sources listed in the manifest."
-        },
-        "localCoder.runtimePath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional path to a compatible llama-server binary or its directory. Empty uses the binary bundled in the platform VSIX."
-        },
-        "localCoder.runtime.contextSize": {
-          "type": "integer",
-          "default": 0,
-          "minimum": 0,
-          "maximum": 262144,
-          "description": "Override context size. Zero uses the conservative model-profile default."
-        },
-        "localCoder.runtime.threads": {
-          "type": "integer",
-          "default": 0,
-          "minimum": 0,
-          "maximum": 256,
-          "description": "CPU generation threads. Zero chooses a conservative automatic value."
-        },
-        "localCoder.runtime.promptCacheMiB": {
-          "type": "integer",
-          "default": 512,
-          "minimum": 0,
-          "maximum": 4096,
-          "description": "Bounded llama-server prompt-cache RAM in MiB. Set to zero to disable; 512 is conservative for a 32 GB laptop."
-        },
-        "localCoder.runtime.port": {
-          "type": "integer",
-          "default": 0,
-          "minimum": 0,
-          "maximum": 65535,
-          "description": "Loopback port. Zero selects a free ephemeral port."
-        },
-        "localCoder.runtime.autoStart": {
-          "type": "boolean",
-          "default": false,
-          "description": "Start the runtime after extension activation when the selected model is already present."
-        },
-        "localCoder.runtime.startupTimeoutSeconds": {
-          "type": "integer",
-          "default": 300,
-          "minimum": 30,
-          "maximum": 1800,
-          "description": "Maximum time to wait for a large model to become ready."
-        },
-        "localCoder.runtime.gpuLayers": {
-          "type": [
-            "string",
-            "integer"
-          ],
-          "default": "auto",
-          "minimum": 0,
-          "maximum": 999,
-          "description": "Layers to offload to the GPU. \"auto\" offloads as many as the device holds, \"off\" keeps generation entirely on the CPU, and a number pins the count. A machine with no usable GPU falls back to the CPU on its own."
-        },
-        "localCoder.runtime.enableDraftModel": {
-          "type": "boolean",
-          "default": false,
-          "description": "Use the profile's draft model for speculative decoding when it is installed. Off by default: the drafter published for Muse Glimmer is a different architecture (dflash) from the model it drafts for, and llama.cpp refuses to create the context it needs, which fails the whole launch. If a run that offers a drafter fails, the runtime retries without it automatically."
-        },
-        "localCoder.runtime.draftMaxTokens": {
-          "type": "integer",
-          "default": 3,
-          "minimum": 1,
-          "maximum": 64,
-          "description": "Maximum tokens the draft model proposes per step. On a CPU the cost of a verification pass grows with the number of positions verified -- measured at about 77 ms per position against 157 ms for the weight stream -- so a small block wins even when the drafter agrees often. Measured on a 28-core machine: 3 gives 2.04x, 15 gives 1.09x and is a net loss at the model's own sampling settings. The effective ceiling still comes from the drafter: a DFlash drafter spends one of its 16 block slots on the anchor token, so 15 is its maximum and larger values are clamped."
-        },
-        "localCoder.runtime.extraArguments": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+    "configuration": [
+      {
+        "title": "Model",
+        "order": 1,
+        "properties": {
+          "localCoder.modelProfile": {
+            "type": "string",
+            "default": "qwen3-coder-30b-a3b-q4xl",
+            "enum": [
+              "qwen3-coder-30b-a3b-q4xl",
+              "qwen3-coder-30b-a3b-iq2m",
+              "muse-glimmer-30b-kquant",
+              "muse-glimmer-30b-kquant-dynamic"
+            ],
+            "enumDescriptions": [
+              "Recommended. 3.3B-active mixture-of-experts, no reasoning phase, has fill-in-the-middle.",
+              "Low-memory fallback. Smaller but not proportionally faster on CPU, and weaker on code.",
+              "Deep reasoning, dense 30B. Much slower on CPU; no fill-in-the-middle.",
+              "Deep reasoning at higher precision. Slower again, and the largest footprint here."
+            ],
+            "description": "Model profile selected from the checked-in approved manifest.",
+            "order": 1
           },
-          "description": "Optional CPU scheduling/warm-up arguments from a strict allow-list; all other llama-server arguments are rejected."
-        },
-        "localCoder.inlineCompletions.enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable local fill-in-the-middle inline suggestions. The runtime must already be started."
-        },
-        "localCoder.inlineCompletions.maxTokens": {
-          "type": "integer",
-          "default": 96,
-          "minimum": 16,
-          "maximum": 512,
-          "description": "Maximum tokens for an inline completion."
-        },
-        "localCoder.inlineCompletions.debounceMs": {
-          "type": "integer",
-          "default": 450,
-          "minimum": 100,
-          "maximum": 3000,
-          "description": "Pause before an automatic inline request."
-        },
-        "localCoder.context.maxCharacters": {
-          "type": "integer",
-          "default": 16000,
-          "minimum": 4000,
-          "maximum": 250000,
-          "description": "Maximum characters of workspace context attached to a request. Measured on the default profile, prompt processing is the dominant cost and it degrades with depth: 60 tok/s at 579 tokens, 37 at 2327, and 16 at 9227, where a single turn took 9.5 minutes on a 28-core machine. 48000 characters is roughly 12000 tokens and put every turn in that range, so the default is now 16000. Raise it only if you are willing to wait; the cost is paid on every turn."
-        },
-        "localCoder.context.maxRetrievedFiles": {
-          "type": "integer",
-          "default": 5,
-          "minimum": 0,
-          "maximum": 20,
-          "description": "Maximum lexically selected workspace files added to a chat request."
-        },
-        "localCoder.context.extraFiles": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+          "localCoder.modelDirectory": {
+            "type": "string",
+            "default": "",
+            "description": "Directory for GGUF files. Empty uses a user-level LocalCoder models directory.",
+            "order": 2
           },
-          "description": "Workspace-relative glob patterns always considered for chat context, subject to secret/path exclusions."
-        },
-        "localCoder.context.useProjectMemory": {
-          "type": "boolean",
-          "default": true,
-          "description": "Include .localcoder/memory.md from the workspace in every request. The file records standing project facts such as build and test commands. It is treated as untrusted workspace data, not as instructions, and is capped at 8,000 characters."
-        },
-        "localCoder.context.includeDiagnostics": {
-          "type": "boolean",
-          "default": true,
-          "description": "Include active-document diagnostics in local prompts."
-        },
-        "localCoder.web.enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Let the agent search and fetch web pages. OFF BY DEFAULT, and a deliberate reversal of this extension's posture: everything else runs locally and sends nothing. The search query itself is the risk \u2014 a model that can search can encode workspace content into it \u2014 so every query and URL is recorded in the agent audit log before the request is sent, queries are capped at 300 characters and a single line, and only hosts you list are reachable. Read localCoder.web.allowedHosts before enabling."
-        },
-        "localCoder.web.allowedHosts": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+          "localCoder.modelMirrorBaseUrl": {
+            "type": "string",
+            "default": "",
+            "description": "Approved internal HTTPS base URL. The model file name is appended before public sources are tried.",
+            "order": 3
           },
-          "description": "Hosts the agent may contact, e.g. \"docs.python.org\". A bare domain also covers its subdomains. There is no wildcard and no \"any host\" value: an empty list means no web access, so a half-finished configuration fails closed. The list is re-checked after every redirect, so an approved host cannot bounce the request elsewhere."
-        },
-        "localCoder.web.searchUrl": {
-          "type": "string",
-          "default": "",
-          "description": "Search endpoint, with {query} where the URL-encoded terms go \u2014 for example an internal documentation search. Its host must also appear in localCoder.web.allowedHosts. Empty disables web_search while leaving web_fetch available for known URLs."
-        },
-        "localCoder.agent.mode": {
-          "type": "string",
-          "default": "off",
-          "enum": [
-            "off",
-            "readonly",
-            "allowlist",
-            "confirm"
-          ],
-          "enumDescriptions": [
-            "Agent tools are disabled entirely.",
-            "The model may read, list, and search workspace files. No commands run.",
-            "As readonly, plus commands whose argv matches localCoder.agent.allowedCommands.",
-            "As readonly, plus any command, but each one must be confirmed."
-          ],
-          "description": "Whether the model may use workspace tools. Off by default. Secret and binary paths are excluded from reading in every mode, and commands never run through a shell."
-        },
-        "localCoder.agent.allowedCommands": {
-          "type": "array",
-          "default": [
-            "git status",
-            "git diff",
-            "git log",
-            "npm test",
-            "npm run lint",
-            "node --test"
-          ],
-          "items": {
-            "type": "string"
+          "localCoder.network.allowPublicModelDownload": {
+            "type": "boolean",
+            "default": true,
+            "description": "Allow direct download from non-Hugging-Face public sources listed in the manifest.",
+            "order": 4
+          }
+        }
+      },
+      {
+        "title": "Chat",
+        "order": 2,
+        "properties": {
+          "localCoder.chat.persistHistory": {
+            "type": "boolean",
+            "default": false,
+            "description": "Store this workspace's chat transcript so it survives restarting VS Code. Off by default: a transcript on disk outlives the session and can contain quoted source. It is written to the extension's private storage directory, never into the workspace, and \u201cClear conversation\u201d deletes it.",
+            "order": 1
           },
-          "description": "Commands the agent may run in allowlist mode. Each entry is matched as an argv prefix, never as text, so \"npm test\" cannot authorise \"npm test; rm -rf ~\". This list replaces the built-in defaults rather than extending them."
-        },
-        "localCoder.agent.allowWrite": {
-          "type": "boolean",
-          "default": false,
-          "description": "Let the agent create and edit workspace files. Off by default, and gated separately from running commands: permission to run the test suite is not permission to rewrite your source. Every change is applied through the editor so it appears in the undo history, edits must match their target text exactly once, and files under .localcoder/ plus any excluded secret path are never writable. In confirm mode each change is confirmed individually."
-        },
-        "localCoder.agent.maxSteps": {
-          "type": "integer",
-          "default": 8,
-          "minimum": 1,
-          "maximum": 30,
-          "description": "Maximum tool calls in one agent turn. Every step costs a full prompt evaluation, so a low cap keeps a confused model from spending minutes."
-        },
-        "localCoder.chat.persistHistory": {
-          "type": "boolean",
-          "default": false,
-          "description": "Store this workspace's chat transcript so it survives restarting VS Code. Off by default: a transcript on disk outlives the session and can contain quoted source. It is written to the extension's private storage directory, never into the workspace, and \u201cClear conversation\u201d deletes it."
-        },
-        "localCoder.chat.maxHistoryTurns": {
-          "type": "integer",
-          "default": 6,
-          "minimum": 0,
-          "maximum": 20,
-          "description": "Recent user/assistant turns retained in extension memory."
-        },
-        "localCoder.chat.reasoningStrength": {
-          "type": "string",
-          "default": "medium",
-          "enum": [
-            "off",
-            "low",
-            "medium",
-            "high",
-            "xhigh"
-          ],
-          "enumDescriptions": [
-            "Send nothing, and let the model use its own default. For Muse Glimmer that default is 'high', the slowest setting.",
-            "Least thinking, fastest first word. Measured at 73 analysis tokens against 589 at high.",
-            "Balanced. The default.",
-            "The model's own default: most thinking, slowest.",
-            "Maximum thinking. Measured no better than high on a coding prompt, and no faster."
-          ],
-          "description": "How hard a reasoning model should think before answering. Thinking is generated at the same speed as the answer, so on a CPU this is the largest single influence on how long you wait: measured on one coding question, 'low' reached the first word of the answer in 27 seconds where 'high' took 147. Ignored by models with no reasoning channel. The short selection commands always ask for 'low', since you are waiting on them."
-        },
-        "localCoder.chat.maxOutputTokens": {
-          "type": "integer",
-          "default": 0,
-          "minimum": 0,
-          "maximum": 16384,
-          "description": "Maximum tokens the model may generate for one chat reply. 0 uses the model profile's own limit. Raise this on a reasoning model: its private analysis is spent from the same budget, so a limit that is too low can be exhausted before the answer begins and the reply arrives empty. Every token added here is taken from the conversation history that fits alongside it."
+          "localCoder.chat.maxHistoryTurns": {
+            "type": "integer",
+            "default": 6,
+            "minimum": 0,
+            "maximum": 20,
+            "description": "Recent user/assistant turns retained in extension memory.",
+            "order": 2
+          },
+          "localCoder.chat.reasoningStrength": {
+            "type": "string",
+            "default": "medium",
+            "enum": [
+              "off",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ],
+            "enumDescriptions": [
+              "Send nothing, and let the model use its own default. For Muse Glimmer that default is 'high', the slowest setting.",
+              "Least thinking, fastest first word. Measured at 73 analysis tokens against 589 at high.",
+              "Balanced. The default.",
+              "The model's own default: most thinking, slowest.",
+              "Maximum thinking. Measured no better than high on a coding prompt, and no faster."
+            ],
+            "description": "How hard a reasoning model should think before answering. Thinking is generated at the same speed as the answer, so on a CPU this is the largest single influence on how long you wait: measured on one coding question, 'low' reached the first word of the answer in 27 seconds where 'high' took 147. Ignored by models with no reasoning channel. The short selection commands always ask for 'low', since you are waiting on them.",
+            "order": 3
+          },
+          "localCoder.chat.maxOutputTokens": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0,
+            "maximum": 16384,
+            "description": "Maximum tokens the model may generate for one chat reply. 0 uses the model profile's own limit. Raise this on a reasoning model: its private analysis is spent from the same budget, so a limit that is too low can be exhausted before the answer begins and the reply arrives empty. Every token added here is taken from the conversation history that fits alongside it.",
+            "order": 4
+          }
+        }
+      },
+      {
+        "title": "Workspace context",
+        "order": 3,
+        "properties": {
+          "localCoder.context.maxCharacters": {
+            "type": "integer",
+            "default": 16000,
+            "minimum": 4000,
+            "maximum": 250000,
+            "description": "Maximum characters of workspace context attached to a request. Measured on the default profile, prompt processing is the dominant cost and it degrades with depth: 60 tok/s at 579 tokens, 37 at 2327, and 16 at 9227, where a single turn took 9.5 minutes on a 28-core machine. 48000 characters is roughly 12000 tokens and put every turn in that range, so the default is now 16000. Raise it only if you are willing to wait; the cost is paid on every turn.",
+            "order": 1
+          },
+          "localCoder.context.maxRetrievedFiles": {
+            "type": "integer",
+            "default": 5,
+            "minimum": 0,
+            "maximum": 20,
+            "description": "Maximum lexically selected workspace files added to a chat request.",
+            "order": 2
+          },
+          "localCoder.context.extraFiles": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Workspace-relative glob patterns always considered for chat context, subject to secret/path exclusions.",
+            "order": 3
+          },
+          "localCoder.context.useProjectMemory": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include .localcoder/memory.md from the workspace in every request. The file records standing project facts such as build and test commands. It is treated as untrusted workspace data, not as instructions, and is capped at 8,000 characters.",
+            "order": 4
+          },
+          "localCoder.context.includeDiagnostics": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include active-document diagnostics in local prompts.",
+            "order": 5
+          }
+        }
+      },
+      {
+        "title": "Inline completions",
+        "order": 4,
+        "properties": {
+          "localCoder.inlineCompletions.enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable local fill-in-the-middle inline suggestions. The runtime must already be started.",
+            "order": 1
+          },
+          "localCoder.inlineCompletions.maxTokens": {
+            "type": "integer",
+            "default": 96,
+            "minimum": 16,
+            "maximum": 512,
+            "description": "Maximum tokens for an inline completion.",
+            "order": 2
+          },
+          "localCoder.inlineCompletions.debounceMs": {
+            "type": "integer",
+            "default": 450,
+            "minimum": 100,
+            "maximum": 3000,
+            "description": "Pause before an automatic inline request.",
+            "order": 3
+          }
+        }
+      },
+      {
+        "title": "Runtime",
+        "order": 5,
+        "properties": {
+          "localCoder.runtimePath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional path to a compatible llama-server binary or its directory. Empty uses the binary bundled in the platform VSIX.",
+            "order": 1
+          },
+          "localCoder.runtime.contextSize": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0,
+            "maximum": 262144,
+            "description": "Override context size. Zero uses the conservative model-profile default.",
+            "order": 2
+          },
+          "localCoder.runtime.threads": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0,
+            "maximum": 256,
+            "description": "CPU generation threads. Zero chooses a conservative automatic value.",
+            "order": 3
+          },
+          "localCoder.runtime.promptCacheMiB": {
+            "type": "integer",
+            "default": 512,
+            "minimum": 0,
+            "maximum": 4096,
+            "description": "Bounded llama-server prompt-cache RAM in MiB. Set to zero to disable; 512 is conservative for a 32 GB laptop.",
+            "order": 4
+          },
+          "localCoder.runtime.port": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0,
+            "maximum": 65535,
+            "description": "Loopback port. Zero selects a free ephemeral port.",
+            "order": 5
+          },
+          "localCoder.runtime.autoStart": {
+            "type": "boolean",
+            "default": false,
+            "description": "Start the runtime after extension activation when the selected model is already present.",
+            "order": 6
+          },
+          "localCoder.runtime.startupTimeoutSeconds": {
+            "type": "integer",
+            "default": 300,
+            "minimum": 30,
+            "maximum": 1800,
+            "description": "Maximum time to wait for a large model to become ready.",
+            "order": 7
+          },
+          "localCoder.runtime.gpuLayers": {
+            "type": [
+              "string",
+              "integer"
+            ],
+            "default": "auto",
+            "minimum": 0,
+            "maximum": 999,
+            "description": "Layers to offload to the GPU. \"auto\" offloads as many as the device holds, \"off\" keeps generation entirely on the CPU, and a number pins the count. A machine with no usable GPU falls back to the CPU on its own.",
+            "order": 8
+          },
+          "localCoder.runtime.enableDraftModel": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use the profile's draft model for speculative decoding when it is installed. Off by default: the drafter published for Muse Glimmer is a different architecture (dflash) from the model it drafts for, and llama.cpp refuses to create the context it needs, which fails the whole launch. If a run that offers a drafter fails, the runtime retries without it automatically.",
+            "order": 9
+          },
+          "localCoder.runtime.draftMaxTokens": {
+            "type": "integer",
+            "default": 3,
+            "minimum": 1,
+            "maximum": 64,
+            "description": "Maximum tokens the draft model proposes per step. On a CPU the cost of a verification pass grows with the number of positions verified -- measured at about 77 ms per position against 157 ms for the weight stream -- so a small block wins even when the drafter agrees often. Measured on a 28-core machine: 3 gives 2.04x, 15 gives 1.09x and is a net loss at the model's own sampling settings. The effective ceiling still comes from the drafter: a DFlash drafter spends one of its 16 block slots on the anchor token, so 15 is its maximum and larger values are clamped.",
+            "order": 10
+          },
+          "localCoder.runtime.extraArguments": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional CPU scheduling/warm-up arguments from a strict allow-list; all other llama-server arguments are rejected.",
+            "order": 11
+          }
+        }
+      },
+      {
+        "title": "Agent",
+        "order": 6,
+        "properties": {
+          "localCoder.agent.mode": {
+            "type": "string",
+            "default": "off",
+            "enum": [
+              "off",
+              "readonly",
+              "allowlist",
+              "confirm"
+            ],
+            "enumDescriptions": [
+              "Agent tools are disabled entirely.",
+              "The model may read, list, and search workspace files. No commands run.",
+              "As readonly, plus commands whose argv matches localCoder.agent.allowedCommands.",
+              "As readonly, plus any command, but each one must be confirmed."
+            ],
+            "description": "Whether the model may use workspace tools. Off by default. Secret and binary paths are excluded from reading in every mode, and commands never run through a shell.",
+            "order": 1
+          },
+          "localCoder.agent.allowedCommands": {
+            "type": "array",
+            "default": [
+              "git status",
+              "git diff",
+              "git log",
+              "npm test",
+              "npm run lint",
+              "node --test"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Commands the agent may run in allowlist mode. Each entry is matched as an argv prefix, never as text, so \"npm test\" cannot authorise \"npm test; rm -rf ~\". This list replaces the built-in defaults rather than extending them.",
+            "order": 2
+          },
+          "localCoder.agent.allowWrite": {
+            "type": "boolean",
+            "default": false,
+            "description": "Let the agent create and edit workspace files. Off by default, and gated separately from running commands: permission to run the test suite is not permission to rewrite your source. Every change is applied through the editor so it appears in the undo history, edits must match their target text exactly once, and files under .localcoder/ plus any excluded secret path are never writable. In confirm mode each change is confirmed individually.",
+            "order": 3
+          },
+          "localCoder.agent.maxSteps": {
+            "type": "integer",
+            "default": 8,
+            "minimum": 1,
+            "maximum": 30,
+            "description": "Maximum tool calls in one agent turn. Every step costs a full prompt evaluation, so a low cap keeps a confused model from spending minutes.",
+            "order": 4
+          }
+        }
+      },
+      {
+        "title": "Web access",
+        "order": 7,
+        "properties": {
+          "localCoder.web.enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Let the agent search and fetch web pages. OFF BY DEFAULT, and a deliberate reversal of this extension's posture: everything else runs locally and sends nothing. The search query itself is the risk \u2014 a model that can search can encode workspace content into it \u2014 so every query and URL is recorded in the agent audit log before the request is sent, queries are capped at 300 characters and a single line, and only hosts you list are reachable. Read localCoder.web.allowedHosts before enabling.",
+            "order": 1
+          },
+          "localCoder.web.allowedHosts": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Hosts the agent may contact, e.g. \"docs.python.org\". A bare domain also covers its subdomains. There is no wildcard and no \"any host\" value: an empty list means no web access, so a half-finished configuration fails closed. The list is re-checked after every redirect, so an approved host cannot bounce the request elsewhere.",
+            "order": 2
+          },
+          "localCoder.web.searchUrl": {
+            "type": "string",
+            "default": "",
+            "description": "Search endpoint, with {query} where the URL-encoded terms go \u2014 for example an internal documentation search. Its host must also appear in localCoder.web.allowedHosts. Empty disables web_search while leaving web_fetch available for known URLs.",
+            "order": 3
+          }
         }
       }
-    }
+    ]
   },
   "scripts": {
     "test": "node --test test/*.test.js",
