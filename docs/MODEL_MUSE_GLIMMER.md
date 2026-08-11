@@ -107,19 +107,69 @@ tool calling", with follow-ups expected. Expect churn for a week or two.
 
 ---
 
-## Speculative decoding: the drafter is real and worth recovering
+## Speculative decoding: the drafter works, and we invoked it wrongly
 
 `dflash-kquant.gguf` is Meta's **DFlash block-diffusion drafter**, ~3B, 5 draft
-layers, block size 16, sliding window 2048 — matching our header exactly. Meta
-reports **~3.1x on an RTX 5090, 1.5x on an M4 Max, with identical output
-quality**, since speculative verification is lossless.
+layers, block size 16, sliding window 2048. Meta reports **~3.1x on an RTX 5090,
+1.5x on an M4 Max, with identical output quality**, since verification is
+lossless.
 
-So speculative decoding is a designed feature with a large payoff, not a
-mismatched pairing as we assumed when it failed to start. **Unverified but
-important:** there is a suggestion that Meta's distributed DFlash GGUFs may be
-incompatible with upstream llama.cpp over Q/K storage format differences. That
-would explain our failure exactly. It is being researched separately; treat the
-drafter as unusable until proven otherwise, but do not write it off.
+**Correction.** We previously recorded the drafter as architecturally
+incompatible. That was wrong, and the manifest said so in shipped data. The
+evidence:
+
+- **`"dflash requires ctc_other"` is a misreading of `ctx_other`, and it is a
+  benign warning, not an error.** DFlash has no `token_embd.weight` and no
+  `output.weight` because it borrows both from the target model, so it cannot
+  build a standalone context. During llama-server's memory-fitting probe the
+  draft context is built without a target, so the throw always fires; it is
+  caught and logged as a warning, and startup continues.
+  (`src/llama-context.cpp:154-161`, caught at
+  `tools/server/server-context.cpp:1191-1193`.)
+- Our actual failure was the **next line in the log**: `unknown model
+  architecture: 'muse-glimmer'`. The same root cause as everything else.
+- Meta's published GGUF is **fully upstream-conformant** — the header carries
+  `target_layers`, `block_size 16`, and `mask_token_id`, and the tensor shapes
+  match. **Do not re-convert it.** The Q/K layout does differ between the two
+  files (target NORM rope, drafter NEOX rope) but that asymmetry is deliberate
+  and upstream handles both.
+
+### The flag we were missing
+
+`--model-draft` **alone does not enable speculative decoding for a local file.**
+The speculative type defaults to `NONE`, and the auto-inference that would set it
+only fires for Hugging Face sidecar downloads, never for a local path. The draft
+model loads into memory and is then never used. That gap is open upstream bug
+**PR #26814**.
+
+The correct invocation, matching Meta's own model card:
+
+```
+--model-draft dflash-kquant.gguf --spec-type draft-dflash --spec-draft-n-max 15
+```
+
+Note **15, not 16**: DFlash spends one of the block's 16 slots on the anchor
+token, so the value is clamped to `block_size - 1` with a warning.
+
+Also: `--cache-type-k/v` do **not** propagate to the draft context — the draft
+uses its own `-ctkd` / `-ctvd`. And quantised KV on the draft was once
+catastrophic for acceptance (issue #25725, ~0-2%); that is fixed well before our
+floor, but it is a reason to change draft cache settings only deliberately.
+
+### Verifying it actually engaged
+
+Watch the startup log for `adding speculative implementation 'draft-dflash'` and
+`block_size=16, mask_token_id=201818, n_extract=5`. **If those lines are absent,
+speculation is not running** however healthy the rest looks — which is exactly
+the failure mode of the missing-flag bug. Then check draft acceptance in the
+per-request timings.
+
+**Open risk:** issue #25792 reported DFlash acceptance stuck near 0.15 —
+explicitly device-independent, and a net *slowdown* at that rate. It is closed,
+the reason is unclear, and whether it affects Meta's drafter is unknown. An open
+PR titled "Glimmer drafter optimization" (#26842) may be related. So measure
+acceptance; do not assume the published speedup transfers to CPU. Meta's 1.5x
+figure is Metal, and **no published CPU benchmark for this pairing exists.**
 
 ---
 
