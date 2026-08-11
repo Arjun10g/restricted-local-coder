@@ -303,3 +303,55 @@ observed in the agent runs.
 - **It is one machine.** A 28-core server chip; the Windows target has fewer
   cores and less memory bandwidth, and prefill scales with cores, so the
   first-turn cost above is a floor rather than a typical figure.
+
+---
+
+## The undo guarantee, executed (2026-08-11)
+
+Write tools were always defended with one sentence: *a wrong edit is Ctrl+Z, not
+data loss.* Until now that sentence had never been tested. `writeTools` takes
+`applyEdit` as an injected function and every offline test passes a stub that
+records the call — which proves the tools **request** an edit and says nothing
+about what VS Code does with it. The safety argument rested on an untested claim.
+
+`npm run test:integration` now runs five tests inside a real extension host:
+
+| Test | Property |
+|---|---|
+| Edit to an open file | `undo` restores the original text |
+| Whole-file rewrite | **one** undo restores it, not one per changed line |
+| Edit to a file that is not open | undo still works once the file is opened |
+| File creation | the new file is left **dirty**, so closing without saving discards it |
+| Any edit | disk is unchanged until the user saves — proving the edit goes through the editor, not around it |
+
+All five pass. The last is the one that would catch a regression to `fs.writeFile`:
+if the edit bypassed `WorkspaceEdit`, disk would change while the open document
+did not, and the user would destroy their own work by saving over it.
+
+### Running it
+
+```bash
+npm run test:integration                       # macOS, installed VS Code
+VSCODE_BINARY=/path/to/code npm run test:integration
+```
+
+No new dependencies. `@vscode/test-electron` plus mocha is several packages and a
+lockfile to download an editor and build a command line; this repo ships zero
+dependencies, and an editor is already installed.
+
+**Two traps, both of which cost time here.** A terminal *inside* VS Code inherits
+the extension host's environment:
+
+- `ELECTRON_RUN_AS_NODE=1` makes the executable behave as plain Node, so every
+  flag comes back as `bad option` and the failure looks like bad arguments.
+- `VSCODE_IPC_HOOK` points at the **already-running editor**, so the launch is
+  handed to that instance, no test host starts, and the command **exits 0**. A
+  silent pass is far worse than an error.
+
+The runner unsets both. It also enforces a wall-clock limit (`INTEGRATION_TIMEOUT`,
+default 180s), because an extension host that never reaches `run()` waits forever
+on a window nobody will close.
+
+The runner was verified to fail correctly: a deliberately failing assertion was
+added, and the run reported `5/6 passed`, named the failing test, and exited 1.
+A green runner that cannot go red is worse than no runner.

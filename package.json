@@ -7,7 +7,8 @@
     "test": "node --test extension/test/*.test.js",
     "check": "node tools/check-manifest.js && node tools/check-source.js",
     "validate": "npm run check && npm test",
-    "check-models": "node tools/check-models.js"
+    "check-models": "node tools/check-models.js",
+    "test:integration": "bash tools/run-integration-tests.sh"
   },
   "engines": {
     "node": ">=20"
