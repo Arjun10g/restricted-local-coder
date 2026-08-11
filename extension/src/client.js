@@ -128,6 +128,24 @@ const REASONING_STRENGTHS = new Set(['low', 'medium', 'high', 'xhigh']);
 function reasoningOptions(profile, strength) {
   if (!profile?.reasoning || !strength) return {};
   const wanted = String(strength).toLowerCase();
+
+  /*
+   * "off" cannot be expressed as a strength: this template has no value below
+   * `low`, and sending nothing is precisely the bug — the template then falls
+   * back to its own default of `high`, so a setting named "off" would select
+   * the slowest mode.
+   *
+   * Real suppression is a sampler-level budget of zero, which ends the thinking
+   * block immediately. It goes in the request body, where it takes precedence
+   * over any launch-time default, so it needs no restart and no server flag.
+   */
+  if (wanted === 'off') {
+    return {
+      chat_template_kwargs: { reasoning_strength: 'low' },
+      reasoning_budget_tokens: 0,
+    };
+  }
+
   if (!REASONING_STRENGTHS.has(wanted)) return {};
   return { chat_template_kwargs: { reasoning_strength: wanted } };
 }

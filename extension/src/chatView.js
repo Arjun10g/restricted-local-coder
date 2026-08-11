@@ -326,7 +326,11 @@ class ChatViewProvider {
   reasoningStrength(profile, callSite) {
     if (!profile?.reasoning) return undefined;
     const configured = vscode.workspace.getConfiguration('localCoder').get('chat.reasoningStrength', 'medium');
-    if (configured === 'off') return undefined;
+    // "off" is passed through rather than dropped. Returning undefined here
+    // sent nothing, and the template then applied its own default of `high` —
+    // so the setting named "off" selected the slowest mode. The client turns it
+    // into a zero thinking budget, which actually suppresses it.
+    if (configured === 'off') return 'off';
     return callSite === 'selection' ? 'low' : configured;
   }
 
