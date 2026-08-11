@@ -1,6 +1,7 @@
 **/.git/**
 **/.github/**
 **/test/**
+**/test-integration/**
 **/*.test.js
 **/*.map
 node_modules/**

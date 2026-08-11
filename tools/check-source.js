@@ -253,6 +253,21 @@ for (const key of runtimeKeys) {
 // It now resolves the newest release at run time and only falls back to this
 // constant, which must track the packaged version.
 const bootstrap = fs.readFileSync(path.join(root, 'scripts', 'Start-Workstation.ps1'), 'utf8');
+// Every directory holding test code must be excluded from the package. The
+// original rule was "**/test/**", which reads as covering test directories and
+// does not: adding extension/test-integration/ shipped its harness inside the
+// 0.5.2 VSIX, because the pattern matches a path segment named exactly "test".
+// Enumerating the directories that exist is checkable; a pattern that looks
+// right is not.
+const vscodeignore = fs.readFileSync(path.join(extensionRoot, '.vscodeignore'), 'utf8');
+for (const entry of fs.readdirSync(extensionRoot, { withFileTypes: true })) {
+  if (!entry.isDirectory() || !/^test/.test(entry.name)) continue;
+  assert.ok(
+    vscodeignore.includes(`**/${entry.name}/**`),
+    `extension/${entry.name}/ holds test code and is not excluded in .vscodeignore`
+  );
+}
+
 const fallbackMatch = /\$FallbackVersion\s*=\s*'([^']+)'/.exec(bootstrap);
 assert.ok(fallbackMatch, 'Start-Workstation.ps1 must declare $FallbackVersion');
 assert.equal(
