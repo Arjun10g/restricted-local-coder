@@ -123,7 +123,7 @@ function Write-Warn([string]$Text) { Write-Host "    $Text" -ForegroundColor Yel
 
 # Used only when the release API is unreachable. Kept equal to the packaged
 # version by tools/check-source.js.
-$FallbackVersion = '0.5.1'
+$FallbackVersion = '0.5.2'
 
 if (-not $Version) {
     try {
