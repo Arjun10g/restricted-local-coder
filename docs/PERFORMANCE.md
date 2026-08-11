@@ -814,7 +814,7 @@ The extension therefore starts conservatively:
 8. Prefer the 4-bit `Q4_K_XL` profile. Going below about 4 bits per weight buys
    file size but not proportional speed on a CPU, because dequantisation cost
    rises as the byte count falls, and it measurably costs code correctness. The
-   two "TQ1" profiles were removed in 0.5.0: their GGUF headers declared
+   two "TQ1" profiles were removed in 0.5.1: their GGUF headers declared
    `IQ1_S`, contained no ternary tensors at all, and the name was a publisher
    labelling choice rather than a format.
 
