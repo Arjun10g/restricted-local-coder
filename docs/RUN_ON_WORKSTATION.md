@@ -6,20 +6,20 @@ to substitute.
 ## What this page pins
 
 Digests below are exact and **version-locked**. They are correct for release
-`v0.4.0` and the weights currently published. When either is republished the
+`v0.4.1` and the weights currently published. When either is republished the
 digests change, so take them from the `.sha256` sidecar and the manifest rather
 than from memory.
 
 | | |
 |---|---|
-| Release | `v0.4.0` |
+| Release | `v0.4.1` |
 | Extension id | `restricted-local.restricted-local-coder` |
-| VSIX | `restricted-local-coder-0.4.0-win32-x64.vsix` |
+| VSIX | `restricted-local-coder-0.4.1-win32-x64.vsix` |
 | VSIX size | see the `.sha256` sidecar on the release |
 | VSIX SHA-256 | see the `.sha256` sidecar on the release |
-| Model | `muse-glimmer-30B-kquant-17gb.gguf` |
-| Model size | `16756681056` bytes (15.61 GiB) |
-| Model SHA-256 | `7e9b74b7c8875e9e265695df9613bf6290f2392e479ce740495a129019c488d8` |
+| Model | `Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q4_K_XL.gguf` |
+| Model size | `17690500448` bytes (16.48 GiB) |
+| Model SHA-256 | `e71c9271166ad64865767022e86f45ea4f03a8258389460cc55c8d95e18833db` |
 | Draft model | `dflash-kquant.gguf` (optional) |
 | Draft size | `1631205312` bytes (1.52 GiB) |
 | Draft SHA-256 | `27d9a805fa29b943cfb6ad4843367cd4eaaaf06bd452d8cc3e00a2cd18a677bc` |
@@ -55,7 +55,7 @@ stays locked.
 
 ```powershell
 New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
-Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.0/restricted-local-coder-0.4.0-win32-x64.vsix" -OutFile "C:\coder\coder.vsix"
+Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1/restricted-local-coder-0.4.1-win32-x64.vsix" -OutFile "C:\coder\coder.vsix"
 ```
 
 `curl` in PowerShell is an alias for `Invoke-WebRequest` and rejects curl flags,
@@ -73,8 +73,8 @@ Every release publishes a `.sha256` sidecar beside each VSIX, so the expected
 digest is fetched rather than typed. This stays correct across releases:
 
 ```powershell
-$Base = "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.0"
-$Expected = ((Invoke-WebRequest -Uri "$Base/restricted-local-coder-0.4.0-win32-x64.vsix.sha256" -UseBasicParsing).Content -split '\s+')[0]
+$Base = "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1"
+$Expected = ((Invoke-WebRequest -Uri "$Base/restricted-local-coder-0.4.1-win32-x64.vsix.sha256" -UseBasicParsing).Content -split '\s+')[0]
 $Actual = (Get-FileHash "C:\coder\coder.vsix" -Algorithm SHA256).Hash.ToLower()
 "expected $Expected"
 "actual   $Actual"
@@ -116,7 +116,7 @@ refuses to start in an untrusted workspace by design. Then `Ctrl+Shift+P` →
 
 ```json
 {
-  "localCoder.modelProfile": "muse-glimmer-30b-kquant",
+  "localCoder.modelProfile": "qwen3-coder-30b-a3b-q4xl",
   "localCoder.modelMirrorBaseUrl": "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/",
   "localCoder.network.allowPublicModelDownload": false,
   "localCoder.runtime.contextSize": 8192,
@@ -142,7 +142,7 @@ out to be slower than pure CPU, which does happen on small VRAM.
 > than reporting a GPU it cannot use. Delivering the CUDA runtime is tracked
 > separately; until then, treat Windows performance as CPU performance.
 
-Leave `inlineCompletions.enabled` at `false`. Muse Glimmer has no
+Inline completion now works: the default Qwen3-Coder profile carries the fill-in-the-middle tokens, verified end to end. The older Muse Glimmer profile has no
 fill-in-the-middle tokens, so the extension refuses inline requests for this
 profile regardless — turning it on has no effect. Inline completion needs one of
 the Qwen profiles, whose weights are not currently staged.
@@ -150,11 +150,11 @@ the Qwen profiles, whose weights are not currently staged.
 Confirm the weights are visible before starting a 16 GB transfer:
 
 ```powershell
-(Invoke-WebRequest -Uri "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/muse-glimmer-30B-kquant-17gb.gguf" -Method Head -UseBasicParsing).Headers["Content-Length"]
+(Invoke-WebRequest -Uri "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q4_K_XL.gguf" -Method Head -UseBasicParsing).Headers["Content-Length"]
 (Invoke-WebRequest -Uri "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/dflash-kquant.gguf" -Method Head -UseBasicParsing).Headers["Content-Length"]
 ```
 
-Expect exactly `16756681056` and `1631205312`. Anything else — a timeout, a
+Expect exactly `17690500448` and `1631205312`. Anything else — a timeout, a
 redirect to a login page — means the mirror is unreachable from here, and no
 setting will fix that.
 
@@ -202,7 +202,7 @@ endpoint.
 
 ## Step 8 — Decide whether it is actually good
 
-Getting a reply proves the plumbing, not the model. Muse Glimmer 30B is a 4-bit
+Getting a reply proves the plumbing, not the model. The default profile is a 4-bit
 kquant chosen for agentic chat, and its coding quality on your codebase is the
 open question.
 
@@ -227,8 +227,8 @@ extracts the value for you:
 
 ```powershell
 .\scripts\Invoke-SmokeTest.ps1 `
-  -RuntimePath "$env:USERPROFILE\.vscode\extensions\restricted-local.restricted-local-coder-0.4.0\runtime\win32-x64\llama-server.exe" `
-  -ModelPath "$env:LOCALAPPDATA\RestrictedLocalCoder\models\muse-glimmer-30B-kquant-17gb.gguf"
+  -RuntimePath "$env:USERPROFILE\.vscode\extensions\restricted-local.restricted-local-coder-0.4.1\runtime\win32-x64\llama-server.exe" `
+  -ModelPath "$env:LOCALAPPDATA\RestrictedLocalCoder\models\Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q4_K_XL.gguf"
 ```
 
 It prints `Model trained context (n_ctx_train): <N> tokens` and the GPU layer
@@ -245,7 +245,7 @@ below it is a memory decision; going above it is a correctness one.
 4. `runtime.threads` near the physical core count, not the logical count; extra
    threads can slow memory-bound decoding.
 5. Leave inline completions off during long chats — every typing pause can
-   otherwise schedule inference. With Muse Glimmer this is moot; the profile has
+   otherwise schedule inference. On a Muse Glimmer profile this is moot; it has
    no FIM tokens and the request is refused.
 6. Leave `runtime.gpuLayers` on `auto`. If preflight reports VRAM below the
    profile's `minVramGiB`, compare `off` against `auto` with the benchmark
@@ -268,7 +268,7 @@ below it is a memory decision; going above it is a correctness one.
 | Hash mismatch after downloading | Stale extension build, or a corrupt copy | Confirm step 1 removed the old install, then reinstall |
 | Preflight: Draft model WARN | Optional drafter not downloaded | Rerun **Download or Repair Model**; the weights are skipped if already valid |
 | Preflight: GPU offload WARN | No NVIDIA device, or VRAM below the profile | Expected on a CPU-only machine; generation still works |
-| Inline suggestions never appear | Selected profile has `fim: false` | Expected for Muse Glimmer; use a Qwen profile if you need FIM |
+| Inline suggestions never appear | Selected profile has `fim: false` | Expected on the Muse Glimmer profiles only; the default Qwen3-Coder profile supports it |
 | Runtime log says "Draft model … is not installed" | Drafter absent | Harmless; speculative decoding is skipped |
 | Runtime will not start | Weights failed verification | Run preflight; *Model file* names the problem |
 | Very slow first response | 10 GB paging in | Expected cold; judge the second run |

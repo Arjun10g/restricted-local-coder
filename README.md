@@ -16,7 +16,7 @@ The repository builds a platform-specific VSIX that embeds a pinned `llama.cpp` 
 
 ## Default model decision
 
-The default is **Muse Glimmer 30B, kquant GGUF**: an agentic chat model in a 15.61 GiB 4-bit file, with an optional 1.52 GiB drafter for speculative decoding. It is selected because the exact artifact has an approved digest, fits a 32 GB machine with room for the KV cache and the editor, and is the profile whose weights are actually staged.
+The default is **Muse Glimmer 30B, kquant GGUF**: an agentic chat model in a 16.48 GiB 4-bit file, with an optional 1.52 GiB drafter for speculative decoding. It is selected because the exact artifact has an approved digest, fits a 32 GB machine with room for the KV cache and the editor, and is the profile whose weights are actually staged.
 
 It has **no fill-in-the-middle tokens**, so inline completion is unavailable for it and the extension refuses those requests rather than sending Qwen control tokens to a model that never saw them. Inline completion needs one of the Qwen profiles.
 
@@ -118,7 +118,7 @@ The source repository intentionally contains neither model weights nor compiled 
 
 ### 2. Produce the platform VSIX
 
-Run **Actions → Build platform VSIX → Run workflow**, or push a release tag such as `v0.4.0`. The workflow:
+Run **Actions → Build platform VSIX → Run workflow**, or push a release tag such as `v0.4.1`. The workflow:
 
 1. validates the source and tests;
 2. checks out the full commit in `vendor/llama.cpp.lock.json`;
@@ -133,7 +133,7 @@ For the intended laptop, download the `restricted-local-coder-win32-x64` workflo
 Use **Extensions → … → Install from VSIX…**, or:
 
 ```powershell
-code --install-extension .\restricted-local-coder-0.4.0-win32-x64.vsix --force
+code --install-extension .\restricted-local-coder-0.4.1-win32-x64.vsix --force
 ```
 
 ### 4. Deliver the model

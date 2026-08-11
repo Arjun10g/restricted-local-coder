@@ -2,7 +2,7 @@
   "name": "restricted-local-coder",
   "displayName": "Restricted Local Coder",
   "description": "Self-contained local coding assistant with a bundled llama.cpp runtime and no cloud inference.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "restricted-local",
   "license": "MIT",
   "engines": {
@@ -226,22 +226,18 @@
       "properties": {
         "localCoder.modelProfile": {
           "type": "string",
-          "default": "muse-glimmer-30b-kquant",
+          "default": "qwen3-coder-30b-a3b-q4xl",
           "enum": [
-            "muse-glimmer-30b-kquant",
-            "muse-glimmer-30b-kquant-dynamic",
-            "qwen3-coder-30b-a3b-iq2m",
-            "qwen3-coder-30b-a3b-tq1",
             "qwen3-coder-30b-a3b-q4xl",
-            "qwen3-coder-next-tq1"
+            "qwen3-coder-30b-a3b-iq2m",
+            "muse-glimmer-30b-kquant",
+            "muse-glimmer-30b-kquant-dynamic"
           ],
           "enumDescriptions": [
-            "Recommended. Agentic chat model, no fill-in-the-middle.",
-            "Larger dynamic quantization for quality comparison.",
-            "2-bit Qwen coder; retains fill-in-the-middle for inline completion.",
-            "Ternary experimental footprint profile.",
-            "4-bit quality-first profile.",
-            "80B-total hybrid edge experiment."
+            "Recommended. 3.3B-active mixture-of-experts, no reasoning phase, has fill-in-the-middle.",
+            "Low-memory fallback. Smaller but not proportionally faster on CPU, and weaker on code.",
+            "Deep reasoning, dense 30B. Much slower on CPU; no fill-in-the-middle.",
+            "Deep reasoning at higher precision. Slower again, and the largest footprint here."
           ],
           "description": "Model profile selected from the checked-in approved manifest."
         },
@@ -322,10 +318,10 @@
         },
         "localCoder.runtime.draftMaxTokens": {
           "type": "integer",
-          "default": 16,
+          "default": 15,
           "minimum": 1,
           "maximum": 64,
-          "description": "Maximum tokens the draft model proposes per step. Higher values help when the drafter agrees often and cost throughput when it does not."
+          "description": "Maximum tokens the draft model proposes per step. Higher values help when the drafter agrees often and cost throughput when it does not. The effective ceiling comes from the drafter itself: a DFlash drafter spends one of its 16 block slots on the anchor token, so 15 is its maximum and larger values are clamped."
         },
         "localCoder.runtime.extraArguments": {
           "type": "array",
@@ -436,6 +432,25 @@
           "minimum": 0,
           "maximum": 20,
           "description": "Recent user/assistant turns retained in extension memory."
+        },
+        "localCoder.chat.reasoningStrength": {
+          "type": "string",
+          "default": "medium",
+          "enum": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "enumDescriptions": [
+            "Send nothing, and let the model use its own default. For Muse Glimmer that default is 'high', the slowest setting.",
+            "Least thinking, fastest first word. Measured at 73 analysis tokens against 589 at high.",
+            "Balanced. The default.",
+            "The model's own default: most thinking, slowest.",
+            "Maximum thinking. Measured no better than high on a coding prompt, and no faster."
+          ],
+          "description": "How hard a reasoning model should think before answering. Thinking is generated at the same speed as the answer, so on a CPU this is the largest single influence on how long you wait: measured on one coding question, 'low' reached the first word of the answer in 27 seconds where 'high' took 147. Ignored by models with no reasoning channel. The short selection commands always ask for 'low', since you are waiting on them."
         },
         "localCoder.chat.maxOutputTokens": {
           "type": "integer",

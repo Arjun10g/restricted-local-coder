@@ -45,6 +45,10 @@ for (const required of [
   // pinned tag removed --draft-max in favour of the spec-draft spelling.
   "'--model-draft'",
   "'--spec-draft-n-max'",
+  // --model-draft on its own loads a drafter that is never used: the
+  // speculative type defaults to none for a local file. Omitting this spends
+  // memory on speculation that silently never runs.
+  "'--spec-type'",
   "'--n-gpu-layers'",
 ]) {
   assert.ok(runtime.includes(required), `Runtime hardening is missing ${required}`);

@@ -34,7 +34,7 @@ const PROFILE = {
   contextSize: 8192,
   batchSize: 512,
   ubatchSize: 128,
-  draftModel: { fileName: 'drafter.gguf', optional: true },
+  draftModel: { fileName: 'drafter.gguf', optional: true, specType: 'draft-dflash', blockSize: 16 },
 };
 
 test('gpuLayers accepts auto, off, an explicit count, and refuses to misread a typo', () => {
@@ -65,7 +65,13 @@ test('an installed drafter is passed with the flag names the pinned tag accepts'
   const args = managerWith(DRAFT_ON).accelerationArguments(modelFile, PROFILE);
   assert.ok(args.includes('--model-draft'));
   assert.equal(args[args.indexOf('--model-draft') + 1], path.join(directory, 'drafter.gguf'));
-  assert.equal(args[args.indexOf('--spec-draft-n-max') + 1], '16');
+  // 15, not 16: a DFlash drafter spends one of its 16 block slots on the
+  // anchor token, so 16 is clamped upstream with a warning.
+  assert.equal(args[args.indexOf('--spec-draft-n-max') + 1], '15');
+  // Without --spec-type the drafter is loaded and never used: the speculative
+  // type defaults to none for a local file, and is only inferred for Hugging
+  // Face sidecar downloads. The symptom is silent -- memory spent, no speedup.
+  assert.equal(args[args.indexOf('--spec-type') + 1], 'draft-dflash');
   assert.ok(args.includes('--n-gpu-layers-draft'), 'the drafter follows the main model onto the GPU');
   // The upstream spellings removed before the pinned tag must never reappear.
   assert.ok(!args.includes('--draft-max'));
@@ -98,16 +104,27 @@ test('disabling the draft setting suppresses speculative decoding even when inst
   assert.ok(!args.includes('--model-draft'));
 });
 
-test('draftMaxTokens is clamped into the range the setting declares', (t) => {
+test('draftMaxTokens is clamped by the drafter, not by the settings range', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'local-coder-draft-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   fs.writeFileSync(path.join(directory, 'drafter.gguf'), 'stub');
   const modelFile = path.join(directory, 'model.gguf');
 
+  // The ceiling is a property of the drafter -- blockSize - 1 -- not of the
+  // setting, so the manifest can describe a drafter with different limits
+  // without a code change.
   const high = managerWith({ ...DRAFT_ON, 'runtime.draftMaxTokens': 500 }).accelerationArguments(modelFile, PROFILE);
-  assert.equal(high[high.indexOf('--spec-draft-n-max') + 1], '64');
+  assert.equal(high[high.indexOf('--spec-draft-n-max') + 1], '15');
   const low = managerWith({ ...DRAFT_ON, 'runtime.draftMaxTokens': 0 }).accelerationArguments(modelFile, PROFILE);
   assert.equal(low[low.indexOf('--spec-draft-n-max') + 1], '1');
+
+  // A drafter that declares no block size keeps the generic ceiling.
+  const generic = managerWith({ ...DRAFT_ON, 'runtime.draftMaxTokens': 500 }).accelerationArguments(modelFile, {
+    ...PROFILE,
+    draftModel: { fileName: 'drafter.gguf', optional: true },
+  });
+  assert.equal(generic[generic.indexOf('--spec-draft-n-max') + 1], '64');
+  assert.ok(!generic.includes('--spec-type'), 'no spec type is invented for a drafter that declares none');
 });
 
 test('a profile without a draft model never receives drafting flags', () => {
@@ -197,4 +214,33 @@ test('a failure with no drafter involved is reported, not retried forever', asyn
 
   await assert.rejects(() => manager.startWithDraftFallback(), /corrupt/);
   assert.equal(attempts, 1, 'a genuine failure must surface immediately');
+});
+
+test('repacking is off unless a profile asks for it, because it doubles resident memory', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'local-coder-repack-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const modelFile = path.join(directory, 'model.gguf');
+  const manager = managerWith({});
+  const base = { ...PROFILE, contextSize: 8192, batchSize: 512, ubatchSize: 128 };
+
+  // Measured: repacking keeps a second, private copy of the weights, taking
+  // peak resident memory from 17.0 to 31.0 GiB for a 16.5 GiB model.
+  const off = manager.buildArguments({ modelFile, profile: base, port: 1, threads: 4 });
+  assert.ok(off.includes('--no-repack'));
+
+  const on = manager.buildArguments({ modelFile, profile: { ...base, repack: true }, port: 1, threads: 4 });
+  assert.ok(!on.includes('--no-repack'), 'a profile may opt back in when the memory exists');
+});
+
+test('the runtime never enables a full-size sliding-window cache', () => {
+  // --swa-full would give every layer a full-length KV cache and discard the
+  // rolling-window saving that makes the windowed profile affordable.
+  const fs2 = require('node:fs');
+  const source = fs2.readFileSync(path.join(__dirname, '..', 'src', 'runtimeManager.js'), 'utf8');
+  assert.ok(!source.includes('--swa-full'));
+  const policy = fs2.readFileSync(path.join(__dirname, '..', 'src', 'runtimePolicy.js'), 'utf8');
+  const { validateExtraArguments } = require('../src/runtimePolicy');
+  // And a user must not be able to smuggle it in through extraArguments.
+  assert.throws(() => validateExtraArguments(['--swa-full']), /not allow-listed|Unsafe/i);
+  assert.ok(!policy.includes("'--swa-full'") || policy.includes('PROTECTED'), 'swa-full must never be user-settable');
 });

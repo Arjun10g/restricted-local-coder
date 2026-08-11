@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const vscode = require('vscode');
 const { isAbortError, safeErrorMessage } = require('./util');
 const { isSensitivePath } = require('./contextRules');
+const { stripInlineReasoning } = require('./client');
 const { ConversationStore } = require('./conversationStore');
 const { availableHistoryTokens, selectHistory } = require('./historyBudget');
 const { AuditLog } = require('./agent/auditLog');
@@ -237,7 +238,7 @@ class ChatViewProvider {
    * Runs one agent turn. Confirmation is asked of the user through a modal, so
    * a command in confirm mode cannot proceed on a webview message alone.
    */
-  async runAgentTurn({ client, messages, profile, requestId, mode, signal }) {
+  async runAgentTurn({ client, messages, profile, requestId, mode, reasoningStrength, signal }) {
     const config = vscode.workspace.getConfiguration('localCoder');
     const workspacePath = this.workspacePath();
     if (!workspacePath) {
@@ -249,6 +250,7 @@ class ChatViewProvider {
       profile,
       workspacePath,
       mode,
+      reasoningStrength,
       rules: config.get('agent.allowedCommands', []),
       maxSteps: config.get('agent.maxSteps', 8),
       audit: this.audit.recorder(),
@@ -271,6 +273,25 @@ class ChatViewProvider {
     });
     this.post({ type: 'assistantToken', id: requestId, token: `\n${outcome.text}` });
     return { text: outcome.text, usage: null };
+  }
+
+  /**
+   * How hard the model should think for this call site.
+   *
+   * Thinking is generated at the same speed as the answer, so on CPU its depth
+   * is the dominant term in how long the user waits: measured, `low` reached the
+   * first word of the answer in 27s where `high` took 147s. The quick selection
+   * commands are ones the user is sitting and waiting on, so they ask for less;
+   * chat and agent turns get the configured depth because the work is harder.
+   *
+   * Returns undefined for a profile with no analysis channel, so nothing is sent
+   * to a template that cannot use it.
+   */
+  reasoningStrength(profile, callSite) {
+    if (!profile?.reasoning) return undefined;
+    const configured = vscode.workspace.getConfiguration('localCoder').get('chat.reasoningStrength', 'medium');
+    if (configured === 'off') return undefined;
+    return callSite === 'selection' ? 'low' : configured;
   }
 
   async ask(prompt, options = {}) {
@@ -304,6 +325,7 @@ class ChatViewProvider {
           messages,
           profile,
           maxTokens: this.maxOutputTokens(profile),
+          reasoningStrength: this.reasoningStrength(profile, options.callSite),
           signal: controller.signal,
           onToken: (token) => {
             assistant += token;
@@ -320,7 +342,15 @@ class ChatViewProvider {
       } else {
         // Tool turns are not streamed: a tool call is only actionable once
         // complete, so progress is reported per step instead of per token.
-        result = await this.runAgentTurn({ client, messages, profile, requestId, mode: agentMode, signal: controller.signal });
+        result = await this.runAgentTurn({
+          client,
+          messages,
+          profile,
+          requestId,
+          mode: agentMode,
+          reasoningStrength: this.reasoningStrength(profile, options.callSite),
+          signal: controller.signal,
+        });
       }
       // `result.text` is the answer channel only. Reasoning is deliberately not
       // merged in here: this value becomes lastResponse, which "Insert Last
@@ -340,9 +370,13 @@ class ChatViewProvider {
       }
       this.lastResponse = assistant;
       if (assistant) {
+        // Stored and replayed, so any reasoning that arrived inline rather than
+        // on its own field is removed here. Left in, it would be resent on
+        // every later turn and compound.
+        const stored = stripInlineReasoning(assistant);
         this.history.push(
           { role: 'user', content: prompt },
-          { role: 'assistant', content: assistant }
+          { role: 'assistant', content: stored }
         );
         await this.persistHistory();
       }
@@ -389,7 +423,7 @@ class ChatViewProvider {
       });
       if (!prompt) return null;
     }
-    return this.ask(prompt, { editor });
+    return this.ask(prompt, { editor, callSite: 'selection' });
   }
 
   async insertLastResponse(replaceSelection) {

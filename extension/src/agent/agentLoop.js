@@ -52,6 +52,7 @@ async function runAgentLoop({
   signal,
   maxSteps = DEFAULT_MAX_STEPS,
   onEvent,
+  reasoningStrength,
   spawn,
 }) {
   const conversation = [...messages];
@@ -62,6 +63,7 @@ async function runAgentLoop({
       messages: conversation,
       profile,
       tools: TOOL_SCHEMAS,
+      reasoningStrength,
       signal,
     });
 
@@ -82,11 +84,23 @@ async function runAgentLoop({
       return { text, steps, stoppedAtLimit: false };
     }
 
-    conversation.push({
+    // Reasoning is replayed here, and only here.
+    //
+    // The rule for a completed turn is to drop it: it wastes context and
+    // degrades the next reply. A tool-calling sequence is the documented
+    // exception -- the analysis that produced this tool call is part of the
+    // still-open turn, and several model families either degrade or hard-error
+    // when it is missing from the assistant message carrying tool_calls.
+    // Sending it to a template that does not want it is free; the field is
+    // ignored.
+    const assistantTurn = {
       role: 'assistant',
       content: message.content ?? '',
       tool_calls: message.tool_calls,
-    });
+    };
+    const reasoning = message.reasoning_content ?? response?.reasoning;
+    if (reasoning) assistantTurn.reasoning_content = reasoning;
+    conversation.push(assistantTurn);
 
     for (const call of toolCalls) {
       const args = parseToolArguments(call.rawArguments);

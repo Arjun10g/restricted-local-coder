@@ -122,7 +122,19 @@ class RuntimeManager {
       if (fs.existsSync(draftFile)) {
         this.lastArgumentsUsedDraft = true;
         args.push('--model-draft', draftFile);
-        args.push('--spec-draft-n-max', String(clampInteger(config.get('runtime.draftMaxTokens', 16), 1, 64, 16)));
+        // --model-draft alone loads the drafter and never uses it: the
+        // speculative type defaults to none, and llama.cpp only infers one for
+        // Hugging Face sidecar downloads, never for a local path. Without this
+        // the drafter costs memory and buys exactly nothing, silently.
+        // The value is manifest data so a drafter of another kind needs no code
+        // change.
+        if (draft.specType) args.push('--spec-type', String(draft.specType));
+        // A DFlash drafter spends one of its block slots on the anchor token,
+        // so the usable maximum is blockSize - 1; asking for more is clamped
+        // upstream with a warning.
+        const draftCeiling = Number.isInteger(draft.blockSize) ? Math.max(1, draft.blockSize - 1) : 64;
+        const requestedDraft = config.get('runtime.draftMaxTokens', 15);
+        args.push('--spec-draft-n-max', String(clampInteger(requestedDraft, 1, draftCeiling, Math.min(15, draftCeiling))));
         // A drafter left on the CPU while the main model is on the GPU is
         // usually slower than no speculation at all.
         if (offload !== null) {
@@ -172,6 +184,17 @@ class RuntimeManager {
       'q8_0',
       '--load-mode',
       'mmap',
+      // Online repacking rewrites the quantised weights into a CPU-friendly
+      // layout at load, and keeps that rewritten copy in ANONYMOUS memory --
+      // measured, a full second copy of the model. On the default profile that
+      // took peak resident memory from 17.0 GiB to 31.0 GiB for a 16.5 GiB
+      // model, which does not fit on a 32 GB machine that is also running
+      // VS Code. It bought 4.5% of generation speed and nothing at all for
+      // prompt processing.
+      //
+      // So it is off by default and the manifest may turn it back on per
+      // profile, for machines with the memory to spare.
+      ...(profile.repack === true ? [] : ['--no-repack']),
       '--flash-attn',
       'auto',
       ...this.accelerationArguments(modelFile, profile),

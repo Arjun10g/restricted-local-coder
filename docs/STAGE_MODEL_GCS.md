@@ -11,8 +11,8 @@ Every command is literal. Values used throughout:
 | Zone | `us-east1-d` |
 | Bucket | `restricted-local-coder-dazzling-howl-491904` |
 | VM name | `local-coder-staging` |
-| Model file | `muse-glimmer-30B-kquant-17gb.gguf` |
-| Approved SHA-256 | `7e9b74b7c8875e9e265695df9613bf6290f2392e479ce740495a129019c488d8` |
+| Model file | `Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q4_K_XL.gguf` |
+| Approved SHA-256 | `e71c9271166ad64865767022e86f45ea4f03a8258389460cc55c8d95e18833db` |
 | Draft model | `dflash-kquant.gguf` |
 | Draft SHA-256 | `27d9a805fa29b943cfb6ad4843367cd4eaaaf06bd452d8cc3e00a2cd18a677bc` |
 
@@ -134,7 +134,7 @@ and add:
 
 ```json
 {
-  "localCoder.modelProfile": "muse-glimmer-30b-kquant",
+  "localCoder.modelProfile": "qwen3-coder-30b-a3b-q4xl",
   "localCoder.modelMirrorBaseUrl": "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/",
   "localCoder.network.allowPublicModelDownload": false,
   "localCoder.runtime.contextSize": 8192,
@@ -154,11 +154,11 @@ Optional sanity check that the object is visible from the workstation before
 starting a 17 GiB download:
 
 ```powershell
-(Invoke-WebRequest -Uri "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/muse-glimmer-30B-kquant-17gb.gguf" -Method Head -UseBasicParsing).Headers["Content-Length"]
+(Invoke-WebRequest -Uri "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q4_K_XL.gguf" -Method Head -UseBasicParsing).Headers["Content-Length"]
 (Invoke-WebRequest -Uri "https://storage.googleapis.com/restricted-local-coder-dazzling-howl-491904/dflash-kquant.gguf" -Method Head -UseBasicParsing).Headers["Content-Length"]
 ```
 
-Expect exactly `16756681056` and `1631205312`.
+Expect exactly `17690500448` and `1631205312`.
 
 ---
 

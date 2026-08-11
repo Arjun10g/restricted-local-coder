@@ -1,89 +1,163 @@
 # Performance and memory tuning
 
-## Measured numbers for the default profile
+Every number in this file was measured, and every number carries the machine it
+came from. Where a claim from elsewhere disagreed with a measurement taken here,
+the measurement won and the claim is recorded as refuted so it does not come
+back.
 
-These replace the estimates that used to be in this file. They were taken on
-2026-08-11 on a rented Linux x86-64 machine (28 vCPU, 56 GB RAM) running
-`llama-server` from the pinned tag **b10355** with **the exact argument list
-`RuntimeManager.buildArguments` produces** — same context, KV type, batch sizes,
-prompt cache, and flags. Model: `muse-glimmer-30B-kquant-17gb.gguf` (Q4_K_M,
-15.6 GiB, architecture `muse-glimmer`, `n_ctx_train` 131072).
+**The measurement machine**, unless stated otherwise: a rented AMD EPYC 7763,
+two sockets, 14 cores each, **28 physical cores with no SMT**, 56 GB RAM, Linux
+x86-64, `llama-server` from the pinned tag **b10355**, CPU-only. The argument
+list is the one `RuntimeManager.buildArguments` produces, with exactly one
+variable changed per comparison.
 
-**No GPU was involved.** The `ubuntu-x64` release archive contains only
+**No GPU was used in any of it.** The `ubuntu-x64` release archive contains only
 `libggml-cpu-*.so`, exactly as the shipped `win-cpu-x64` archive does, so
-`--n-gpu-layers -1` was a no-op and the startup log shows no offload line. Every
-number here is a CPU number.
+`--n-gpu-layers -1` was a no-op and no offload line appears in any startup log.
+These are CPU numbers, which is what the Windows target runs.
 
-| | `--threads 16` (16+ core machine) | `--threads 6` (what an 8-core workstation picks) |
+A note on reading them: **prompt processing (prefill) and generation are bound by
+different resources and must never be averaged together.** Prefill is
+compute-bound and scales with cores; generation is memory-bandwidth-bound and
+does not. Measured here, going from 14 to 28 cores moved prefill by +46% and
+generation by less than 1%. Prefill is also the cost that dominates in this
+extension, because a workspace context is attached to every turn.
+
+## The model choice, decided by measurement
+
+Both models, same machine, same prompt, each with the extension's exact argv:
+
+| | Qwen3-Coder 30B-A3B UD-Q4_K_XL (default) | Muse Glimmer 30B kquant |
 |---|---|---|
-| Cold load to `/health` ok | 19 s | 19 s |
-| Prompt processing | 12.9 tok/s | 6.2 tok/s |
-| Generation | **4.5 tok/s** | **2.7 tok/s** |
-| Peak resident set | 27.2 GiB | 27.2 GiB |
+| Architecture | `qwen3moe`, 128 experts, 8 active (~3.3B active) | `muse-glimmer`, dense, all ~27.9B active |
+| Reasoning phase | none | 529 analysis tokens before any answer |
+| **Seconds to the first word of the answer** | **1.2** | **113.0** |
+| Total seconds for the reply | 24.1 | 179.6 |
+| Generation | ~19 tok/s | ~4.5 tok/s |
+| Fill-in-the-middle | yes | no |
+| Load time | 27 s | 19 s |
 
-`localCoder.runtime.threads` defaults to `0`, which selects
-`max(2, min(16, floor(cores * 0.75)))` — so an 8-core workstation runs the
-right-hand column.
+That is roughly **94x to the first visible word** and 7.5x end to end. Two
+independent causes: only ~3.3B of Qwen's parameters are read per token against
+all ~27.9B of Muse Glimmer's, and Muse Glimmer spends hundreds of tokens
+thinking before it says anything.
 
-### What that means for one question
+Fill-in-the-middle was verified separately, through the route the extension
+actually uses — a raw `POST /completion` with the FIM control tokens, **not** the
+chat route, which returns fenced Markdown. It returned usable code in 1.3 s.
 
-The default model is a **reasoning** model: it emits a private analysis channel
-first and only then the answer. Both are generated at the same speed and both
-are spent from the same output budget. For the prompt *"Write a Python function
-`merge_intervals(intervals)` … then briefly explain the time complexity"*:
+## Repacking doubles resident memory, and that is the memory finding that matters
 
-| | 16 threads | 6 threads |
+`--no-repack` is now the default. Online repacking rewrites the quantised
+weights into a CPU-friendly layout at load time and keeps that rewritten copy in
+**anonymous** memory — a second, private copy of the whole model, on top of the
+memory-mapped original.
+
+| model | repacking | prefill tok/s | generation tok/s | peak resident | anonymous | mapped (evictable) |
+|---|---|---|---|---|---|---|
+| Qwen3-Coder Q4_K_XL | on (upstream default) | 38.20 | 11.32 | **30.95 GiB** | 14.57 | 16.38 |
+| Qwen3-Coder Q4_K_XL | **off** | 38.67 | 10.81 | **16.97 GiB** | 0.48 | 16.48 |
+| Muse Glimmer kquant | on (upstream default) | 12.08 | 4.38 | 27.28 GiB | 11.68 | 15.60 |
+| Muse Glimmer kquant | **off** | 10.63 | 3.84 | 15.93 GiB | 0.33 | 15.60 |
+
+On the default profile, repacking costs **14.0 GiB of extra resident memory** and
+buys 4.5% of generation speed and *nothing* for prefill. A 16.5 GiB model needing
+31 GiB of peak resident memory does not fit on a 32 GB machine that is also
+running VS Code and a language server. Off, it needs 17.0 GiB.
+
+On Muse Glimmer the speed case is stronger — about 12% on both axes — but it
+still costs 11.4 GiB.
+
+Profiles may set `"repack": true` in the manifest to opt back in where the memory
+exists. Nothing is hardcoded.
+
+One caveat stated honestly: peak resident is a high-water mark. After loading,
+the mapped copy is redundant and the kernel may evict it, so steady-state
+pressure is probably lower than the peak. The peak is still real, and it is what
+a 32 GB machine has to survive.
+
+## Context costs almost nothing; do not tune it for memory
+
+Same machine, everything else held constant.
+
+Qwen3-Coder Q4_K_XL, with repacking on:
+
+| `--ctx-size` | peak resident | anonymous |
 |---|---|---|
-| Reasoning tokens before any answer | 529 | 529 |
-| Answer tokens | 316 | 316 |
-| **Wall-clock to the first visible answer character** | **113 s** | **216 s** |
-| Total time for the reply | 180 s | 329 s |
+| 4096 | 30.73 GiB | 14.35 GiB |
+| 8192 | 30.93 GiB | 14.55 GiB |
+| 16384 | 31.33 GiB | 14.95 GiB |
+| 32768 | 32.13 GiB | 15.75 GiB |
 
-On an 8-core workstation that is **three and a half minutes of thinking before
-the first word of the answer appears**, and five and a half minutes to a
-finished reply, for a question of this size. Plan around that; it is not a
-misconfiguration. The chat view shows the reasoning as it streams so the wait is
-visible rather than a blank bubble.
+Muse Glimmer kquant:
 
-### Memory does not scale with context on this model
+| `--ctx-size` | peak resident | anonymous |
+|---|---|---|
+| 4096 | 27.15 GiB | 11.54 GiB |
+| 8192 | 27.18 GiB | 11.57 GiB |
+| 16384 | 27.23 GiB | 11.62 GiB |
 
-Measured with everything else held constant:
+Quadrupling the context costs **85 MiB** on Muse Glimmer and about 600 MiB on
+Qwen3-Coder. Both use grouped-query attention with few KV heads, and Muse Glimmer
+additionally uses a 2048-token sliding window on three of every four layers.
 
-| `--ctx-size` | anonymous (not evictable) | mapped model pages (clean) | peak resident |
+**So lowering `localCoder.runtime.contextSize` is not a memory remedy on either
+model.** It only shortens the conversation. Earlier advice in this file said
+otherwise; it had never been measured. The default context is 16384, chosen
+because it is nearly free rather than because memory forced it down.
+
+## Flash attention: measured, and a widely-repeated claim refuted
+
+A claim circulated that `--flash-attn auto` resolves to on for CPU builds and
+that turning it off gives a large prefill win (a figure of +258% was quoted).
+`llama-bench`, Muse Glimmer, same machine:
+
+| threads | flash attention | pp512 (prefill) | tg128 (generation) |
 |---|---|---|---|
-| 4096 | 11.54 GiB | 15.60 GiB | 27.15 GiB |
-| 8192 | 11.57 GiB | 15.60 GiB | 27.18 GiB |
-| 16384 | 11.62 GiB | 15.60 GiB | 27.23 GiB |
+| 14 | off | 13.08 ± 0.51 | 4.32 ± 0.04 |
+| 28 | off | 20.06 ± 0.01 | 4.26 ± 0.00 |
+| 14 | on | 14.28 ± 0.75 | 4.27 ± 0.08 |
+| 28 | on | 20.92 ± 0.05 | 4.29 ± 0.01 |
 
-Quadrupling the context costs about **85 MiB**. The model uses grouped-query
-attention with 2 KV heads and a sliding-window pattern, so its KV cache is tiny;
-the ~11.6 GiB of anonymous memory is a fixed load-time cost, not a context cost.
+Flash attention on is **slightly faster** for prefill at both thread counts and
+neutral for generation. On this build and this hardware the claim is false, and
+`--flash-attn auto` is kept unchanged.
 
-**Therefore: lowering `localCoder.runtime.contextSize` will not fix memory
-pressure on this profile.** It only shortens the conversation. Earlier advice in
-this file said otherwise; it was never measured. On a 32 GB machine the ~11.6 GiB
-of anonymous memory is the hard floor — the 15.6 GiB of mapped model pages are
-clean and can be evicted under pressure, at the cost of paging.
+Also visible in that table: prefill scales with cores (+46% from 14 to 28) while
+generation does not move. **Untested here:** whether simultaneous multithreading
+hurts. This machine reports one thread per core, so there were no logical cores
+to test with; the recommendation to pin to physical cores on Windows remains a
+recommendation, not something verified in this repository.
 
-`--cache-type-k/v q8_0` versus `f16` made no measurable difference to either
-speed (117 s vs 113 s to first answer, within run-to-run variation) or memory,
-for the same reason: the KV cache is not where the memory goes. q8_0 is kept.
+## Reasoning strength, for the optional Muse Glimmer profile
 
-### Speculative decoding is off, and this is why
+Muse Glimmer's chat template accepts a `reasoning_strength` argument and
+**defaults to `high`**, its most expensive setting, so sending nothing was buying
+the slowest mode. It is passed per request in `chat_template_kwargs`, so it costs
+no restart and different call sites can ask for different depths.
 
-Tested on b10355 with the drafter the manifest declares
-(`dflash-kquant.gguf`, `--model-draft` + `--spec-draft-n-max 16` +
-`--n-gpu-layers-draft -1`, the exact flags the extension adds):
+Same machine, same prompt, temperature 0, 16 threads:
 
-- b10355 no longer fails the launch, as b10344 did. The server logs
-  `dflash requires ctx_other to be set` and
-  `[spec] failed to measure draft model memory`, then loads the drafter and
-  serves normally.
-- **4.55 tok/s with the drafter against 4.54 tok/s without**, same prompt, same
-  machine. No speedup at all, for an extra 1.6 GiB of RAM.
+| `reasoning_strength` | analysis tokens | seconds to the first word | total seconds | answer length |
+|---|---|---|---|---|
+| `low` | 73 | **27.2** | 110.9 | 1459 chars |
+| `medium` | 318 | 83.8 | 137.4 | 961 chars |
+| `high` (model default) | 589 | 147.0 | 220.4 | 1159 chars |
+| `xhigh` | 584 | 146.6 | 223.5 | 1211 chars |
 
-`localCoder.runtime.enableDraftModel` therefore stays `false`. The draft context
-never initialises, so speculation is not actually running.
+`low` reaches the answer 5.4x sooner and on this prompt returned the *longest*
+answer of the four. `xhigh` is indistinguishable from `high` and is not worth
+choosing.
+
+Two caveats. This is one prompt, so read it as a latency result, not a quality
+ranking — the repository's benchmark is a regex screen that cannot tell a wrong
+answer from a right one in the wrong format, and the quality-versus-strength
+question is **not settled here**. And the effect is on generation only; it does
+nothing for prefill, which dominates once a real workspace context is attached.
+
+`localCoder.chat.reasoningStrength` exposes this, defaulting to `medium`. The
+short selection commands always ask for `low`, because the user is waiting on
+them.
 
 ## Memory model
 
@@ -101,14 +175,20 @@ The extension therefore starts conservatively:
 ## Recommended tuning order
 
 1. Keep one model loaded and close unused memory-heavy applications.
-2. Lowering `localCoder.runtime.contextSize` is worth trying on the Qwen
-   profiles, but see the measurements above: on the default Muse Glimmer profile
-   it reclaims about 85 MiB between 16K and 4K and is not a memory remedy.
-3. Keep `localCoder.runtime.promptCacheMiB` at `512`, or set it to `0` to disable prompt caching entirely.
-4. Choose threads near physical-core count; more logical threads can make memory-bound decode slower.
-5. Reduce the profile micro-batch from 128 to 64 through a reviewed profile change if prefill causes pressure.
+2. Leave repacking off. It is the single largest memory lever measured here:
+   14 GiB on the default profile. Do not turn it on below 48 GB of RAM.
+3. Do **not** lower `localCoder.runtime.contextSize` to save memory. Measured, it
+   does almost nothing (see the table above); it only shortens the conversation.
+4. Keep `localCoder.runtime.promptCacheMiB` at `512`, or set it to `0` to disable prompt caching entirely.
+5. Set threads to the physical-core count. Prefill scales with cores; generation
+   does not, so there is nothing to gain past that and contention to lose.
 6. Disable inline completions during long chat work.
-7. Prefer IQ2 over Q4 when paging occurs; use TQ1 only after measuring its correctness.
+7. Prefer the 4-bit `Q4_K_XL` profile. Going below about 4 bits per weight buys
+   file size but not proportional speed on a CPU, because dequantisation cost
+   rises as the byte count falls, and it measurably costs code correctness. The
+   two "TQ1" profiles were removed in 0.4.1: their GGUF headers declared
+   `IQ1_S`, contained no ternary tensors at all, and the name was a publisher
+   labelling choice rather than a format.
 
 The prompt-cache cap is separate from the KV cache. Increasing it can accelerate repeated prefixes but directly consumes RAM; values above 1 GiB are difficult to justify on the intended laptop without measurement.
 

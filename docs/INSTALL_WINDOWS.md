@@ -8,8 +8,8 @@ Values used throughout:
 | | |
 |---|---|
 | Repository | `Arjun10g/restricted-local-coder` |
-| Release tag | `v0.4.0` |
-| Asset | `restricted-local-coder-0.4.0-win32-x64.vsix` |
+| Release tag | `v0.4.1` |
+| Asset | `restricted-local-coder-0.4.1-win32-x64.vsix` |
 | Size | `8200334` bytes |
 | SHA-256 | `01a2f57a355dd55eeaf54e276ffd2f0c0e60722ee0469db88f050122ba4e3cc6` |
 
@@ -34,7 +34,7 @@ begins by creating it.
 
 ```powershell
 New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
-Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.0/restricted-local-coder-0.4.0-win32-x64.vsix" -OutFile "C:\coder\coder.vsix"
+Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1/restricted-local-coder-0.4.1-win32-x64.vsix" -OutFile "C:\coder\coder.vsix"
 ```
 
 ### Route 2 — same, but authenticate to the proxy
@@ -45,14 +45,14 @@ to do.
 
 ```powershell
 New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
-Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.0/restricted-local-coder-0.4.0-win32-x64.vsix" -OutFile "C:\coder\coder.vsix" -ProxyUseDefaultCredentials -UseBasicParsing
+Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1/restricted-local-coder-0.4.1-win32-x64.vsix" -OutFile "C:\coder\coder.vsix" -ProxyUseDefaultCredentials -UseBasicParsing
 ```
 
 If your proxy address is not auto-detected, name it explicitly:
 
 ```powershell
 New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
-Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.0/restricted-local-coder-0.4.0-win32-x64.vsix" -OutFile "C:\coder\coder.vsix" -Proxy "http://proxy.yourorg.com:8080" -ProxyUseDefaultCredentials -UseBasicParsing
+Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1/restricted-local-coder-0.4.1-win32-x64.vsix" -OutFile "C:\coder\coder.vsix" -Proxy "http://proxy.yourorg.com:8080" -ProxyUseDefaultCredentials -UseBasicParsing
 ```
 
 ### Route 3 — .NET WebClient with default credentials
@@ -65,7 +65,7 @@ New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
 $w = New-Object System.Net.WebClient
 $w.Proxy = [System.Net.WebRequest]::GetSystemWebProxy()
 $w.Proxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials
-$w.DownloadFile("https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.0/restricted-local-coder-0.4.0-win32-x64.vsix", "C:\coder\coder.vsix")
+$w.DownloadFile("https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1/restricted-local-coder-0.4.1-win32-x64.vsix", "C:\coder\coder.vsix")
 ```
 
 ### Route 4 — BITS
@@ -75,7 +75,7 @@ and machine policy, so it often works when everything else is blocked.
 
 ```powershell
 New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
-Start-BitsTransfer -Source "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.0/restricted-local-coder-0.4.0-win32-x64.vsix" -Destination "C:\coder\coder.vsix"
+Start-BitsTransfer -Source "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1/restricted-local-coder-0.4.1-win32-x64.vsix" -Destination "C:\coder\coder.vsix"
 ```
 
 ### Route 5 — real curl
@@ -86,14 +86,14 @@ name LO"*. Unlike `Invoke-WebRequest`, curl creates no directories either.
 
 ```powershell
 New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
-curl.exe -L --output "C:\coder\coder.vsix" "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.0/restricted-local-coder-0.4.0-win32-x64.vsix"
+curl.exe -L --output "C:\coder\coder.vsix" "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1/restricted-local-coder-0.4.1-win32-x64.vsix"
 ```
 
 With proxy authentication:
 
 ```powershell
 New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
-curl.exe -L --proxy-ntlm --proxy-user : --output "C:\coder\coder.vsix" "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.0/restricted-local-coder-0.4.0-win32-x64.vsix"
+curl.exe -L --proxy-ntlm --proxy-user : --output "C:\coder\coder.vsix" "https://github.com/Arjun10g/restricted-local-coder/releases/download/v0.4.1/restricted-local-coder-0.4.1-win32-x64.vsix"
 ```
 
 ### Route 6 — a browser
@@ -102,14 +102,14 @@ Browsers already hold the proxy configuration and credentials that PowerShell
 lacks, so this frequently works when nothing else does. Open:
 
 ```
-https://github.com/Arjun10g/restricted-local-coder/releases/tag/v0.4.0
+https://github.com/Arjun10g/restricted-local-coder/releases/tag/v0.4.1
 ```
 
-Download `restricted-local-coder-0.4.0-win32-x64.vsix`, then move it into place:
+Download `restricted-local-coder-0.4.1-win32-x64.vsix`, then move it into place:
 
 ```powershell
 New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
-Move-Item "$env:USERPROFILE\Downloads\restricted-local-coder-0.4.0-win32-x64.vsix" "C:\coder\coder.vsix" -Force
+Move-Item "$env:USERPROFILE\Downloads\restricted-local-coder-0.4.1-win32-x64.vsix" "C:\coder\coder.vsix" -Force
 ```
 
 ### Route 7 — through `codeload.github.com` instead
@@ -123,7 +123,7 @@ the VSIX from a branch archive so it travels the path that already works:
 New-Item -ItemType Directory -Force -Path C:\coder | Out-Null
 Invoke-WebRequest -Uri "https://github.com/Arjun10g/restricted-local-coder/archive/refs/heads/vsix-drop.zip" -OutFile "C:\coder\vsix-drop.zip" -UseBasicParsing
 Expand-Archive -Path "C:\coder\vsix-drop.zip" -DestinationPath "C:\coder\drop" -Force
-Copy-Item "C:\coder\drop\restricted-local-coder-vsix-drop\dist\restricted-local-coder-0.4.0-win32-x64.vsix" "C:\coder\coder.vsix" -Force
+Copy-Item "C:\coder\drop\restricted-local-coder-vsix-drop\dist\restricted-local-coder-0.4.1-win32-x64.vsix" "C:\coder\coder.vsix" -Force
 ```
 
 ---

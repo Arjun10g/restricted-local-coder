@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "verifiedOn": "2026-08-10",
-  "defaultProfile": "muse-glimmer-30b-kquant",
+  "defaultProfile": "qwen3-coder-30b-a3b-q4xl",
   "prohibitedHosts": [
     "huggingface.co",
     "hf.co",
@@ -9,14 +9,91 @@
   ],
   "models": [
     {
+      "id": "qwen3-coder-30b-a3b-q4xl",
+      "displayName": "Qwen3-Coder 30B-A3B - UD-Q4_K_XL (recommended)",
+      "shortName": "Qwen3-Coder 30B 4-bit",
+      "tier": "recommended",
+      "baseModel": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+      "quantizer": "Unsloth Dynamic GGUF",
+      "quantization": "UD-Q4_K_XL",
+      "nominalBitClass": "4-bit",
+      "format": "GGUF",
+      "license": "Apache-2.0",
+      "fileName": "Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q4_K_XL.gguf",
+      "approximateSizeGiB": 16.48,
+      "expectedBytes": 17690500448,
+      "acceptedSha256": [
+        "e71c9271166ad64865767022e86f45ea4f03a8258389460cc55c8d95e18833db"
+      ],
+      "modelScopeModel": "unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF",
+      "downloadUrls": [
+        "https://www.modelscope.cn/models/unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF/resolve/master/Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q4_K_XL.gguf"
+      ],
+      "minimumRamGiB": 24,
+      "recommendedRamGiB": 32,
+      "contextSize": 16384,
+      "batchSize": 512,
+      "ubatchSize": 128,
+      "maxOutputTokens": 2048,
+      "sampling": {
+        "temperature": 0.2,
+        "topP": 0.9,
+        "minP": 0.02,
+        "topK": 40,
+        "repeatPenalty": 1.0
+      },
+      "fim": true,
+      "warning": "Default. Mixture-of-experts with about 3.3B parameters active per token, so on a CPU it is far faster than a dense model of the same file size: the cost per token is set by the active parameters, not the total. It is instruct-only and emits no reasoning channel, so there is no thinking phase to wait through. Its fill-in-the-middle tokens are the ones this extension already uses, so inline completion works. All-K-quant, which takes the fast x86 dequantisation path -- unlike IQ2/IQ3, which are materially slower on CPU despite being smaller. Be realistic about the ceiling: CPU-only inference sits around the floor for comfortable chat and well below what agentic coding wants. See docs/PERFORMANCE.md.",
+      "repack": false,
+      "repackNote": "Repacking cost 14.0 GiB of extra resident memory for 4.5% generation speed and no prompt-processing gain, so it stays off: 17.0 GiB rather than 31.0 GiB peak. Set repack true only on a machine with memory to spare."
+    },
+    {
+      "id": "qwen3-coder-30b-a3b-iq2m",
+      "displayName": "Qwen3-Coder 30B-A3B - UD-IQ2_M (low memory)",
+      "shortName": "Qwen3-Coder 30B 2-bit",
+      "tier": "low-memory",
+      "baseModel": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+      "quantizer": "Unsloth Dynamic GGUF",
+      "quantization": "UD-IQ2_M",
+      "nominalBitClass": "2-bit",
+      "format": "GGUF",
+      "license": "Apache-2.0",
+      "fileName": "Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf",
+      "approximateSizeGiB": 10.1,
+      "expectedBytes": 10848017760,
+      "acceptedSha256": [
+        "0823c953beeda2db652da5839b94fbe08a75725d67bfcd093ca39ba8c1b47d41"
+      ],
+      "modelScopeModel": "unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF",
+      "downloadUrls": [
+        "https://www.modelscope.cn/models/unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF/resolve/master/Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf"
+      ],
+      "minimumRamGiB": 24,
+      "recommendedRamGiB": 32,
+      "contextSize": 16384,
+      "batchSize": 512,
+      "ubatchSize": 128,
+      "maxOutputTokens": 2048,
+      "sampling": {
+        "temperature": 0.2,
+        "topP": 0.9,
+        "minP": 0.02,
+        "topK": 40,
+        "repeatPenalty": 1.0
+      },
+      "fim": true,
+      "warning": "Fallback for machines that cannot hold the 4-bit profile. Below about 4 bits per weight the dequantisation cost eats the byte saving on a CPU, so this is roughly 40 percent smaller but not correspondingly faster, and the quality cost on code is real. Prefer qwen3-coder-30b-a3b-q4xl unless memory forces this.",
+      "repack": false
+    },
+    {
       "id": "muse-glimmer-30b-kquant",
       "displayName": "Muse Glimmer 30B \u2014 kquant (recommended)",
       "shortName": "Muse Glimmer 30B",
-      "tier": "recommended",
+      "tier": "reasoning",
       "baseModel": "meta-models/Muse-Glimmer-30B",
       "quantizer": "Publisher GGUF",
-      "quantization": "kquant",
-      "nominalBitClass": "4-bit",
+      "quantization": "Q4_K_M (published as \"kquant\")",
+      "nominalBitClass": "4-bit (4.81 bpw, Q4_K_M)",
       "format": "GGUF",
       "license": "Apache-2.0",
       "fileName": "muse-glimmer-30B-kquant-17gb.gguf",
@@ -52,16 +129,17 @@
         ],
         "optional": true,
         "architecture": "dflash",
-        "known_incompatible": false,
-        "note": "Different architecture (dflash) from the model it drafts for. Retested on llama.cpp b10355 on 2026-08-11: unlike b10344, the launch no longer fails -- the server logs 'dflash requires ctx_other to be set' and '[spec] failed to measure draft model memory', then loads the drafter and serves normally. It is still off by default because it buys nothing: measured 4.55 tok/s with the drafter against 4.54 tok/s without, on the same prompt and machine, while costing an extra 1.6 GiB of RAM. The failure to create the draft context indicates speculation never actually engages. Re-measure before enabling; the runtime also retries without it if a launch fails.",
-        "measuredOnTag": "b10355",
-        "measuredSpeedup": "none (4.55 vs 4.54 tok/s)"
+        "specType": "draft-dflash",
+        "blockSize": 16,
+        "note": "Meta's published DFlash drafter for this model, upstream-conformant: target_layers [2,14,26,38,50], block_size 16, mask_token_id 201818. Do not re-convert it. Two things were previously misdiagnosed here. First, 'dflash requires ctx_other to be set' is a benign warning, not an error: DFlash has no token_embd.weight and no output.weight because it borrows both from the target, so llama-server's memory-fitting probe -- which builds the draft context with no target -- always throws, and the server catches it and continues. The actual failure was the next line, 'unknown model architecture: muse-glimmer', which was the b10344 pin. Second, --model-draft ALONE DOES NOT ENABLE SPECULATION for a local file: the speculative type defaults to none and is only inferred for Hugging Face sidecar downloads, so the drafter loaded and was never used (upstream PR #26814). specType below supplies --spec-type. Verify it engaged by looking for 'adding speculative implementation' in the startup log, not by the absence of errors."
       },
       "gpu": {
         "minVramGiB": 8,
         "fullOffloadVramGiB": 20
       },
-      "warning": "Agentic reasoning model with no fill-in-the-middle tokens, so inline completion stays with a Qwen profile. It streams a private analysis channel before any answer, which the chat view shows separately; that analysis is spent from maxOutputTokens, which is why the budget is 4096 rather than 2048. n_ctx_train is 131072, measured from the GGUF and confirmed on b10355, so contextSize 16384 is a memory choice, not a model limit: at 16384 the server's resident set measured about 27 GiB, which is already tight on a 32 GB machine."
+      "warning": "Optional deep-reasoning profile, NOT the default, because it is dense: all ~30B parameters are read for every token. Measured on a 28-core machine at 4.5 tok/s generation and 12.9 tok/s prompt processing, with 113 seconds before the first word of the answer at the model's default reasoning strength. Prompt processing is the binding constraint and it does not improve with reasoning settings, so a large workspace context makes it much worse. Choose this when answer depth matters more than latency, and set localCoder.chat.reasoningStrength to low. No fill-in-the-middle tokens, so inline completion stays with a Qwen profile. n_ctx_train is 131072; contextSize 16384 is a memory choice, measured at about 27 GiB resident.",
+      "repack": false,
+      "repackNote": "Repacking cost 11.4 GiB of extra resident memory for about 12% on both prompt processing and generation, so it stays off: 15.9 GiB rather than 27.3 GiB peak. The speed gain is larger here than on the default profile, so repack true is more defensible if the memory exists."
     },
     {
       "id": "muse-glimmer-30b-kquant-dynamic",
@@ -70,8 +148,8 @@
       "tier": "quality",
       "baseModel": "meta-models/Muse-Glimmer-30B",
       "quantizer": "Publisher GGUF",
-      "quantization": "kquant-dynamic",
-      "nominalBitClass": "4-bit",
+      "quantization": "kquant-dynamic (mixed K-quant)",
+      "nominalBitClass": "5-bit (5.65 bpw: mixed Q6_K/Q5_K/Q4_K)",
       "format": "GGUF",
       "license": "Apache-2.0",
       "fileName": "muse-glimmer-30B-kquant-dynamic.gguf",
@@ -107,164 +185,16 @@
         ],
         "optional": true,
         "architecture": "dflash",
-        "known_incompatible": false,
-        "note": "Different architecture (dflash) from the model it drafts for. Retested on llama.cpp b10355 on 2026-08-11: unlike b10344, the launch no longer fails -- the server logs 'dflash requires ctx_other to be set' and '[spec] failed to measure draft model memory', then loads the drafter and serves normally. It is still off by default because it buys nothing: measured 4.55 tok/s with the drafter against 4.54 tok/s without, on the same prompt and machine, while costing an extra 1.6 GiB of RAM. The failure to create the draft context indicates speculation never actually engages. Re-measure before enabling; the runtime also retries without it if a launch fails.",
-        "measuredOnTag": "b10355",
-        "measuredSpeedup": "none (4.55 vs 4.54 tok/s)"
+        "specType": "draft-dflash",
+        "blockSize": 16,
+        "note": "Meta's published DFlash drafter for this model, upstream-conformant: target_layers [2,14,26,38,50], block_size 16, mask_token_id 201818. Do not re-convert it. Two things were previously misdiagnosed here. First, 'dflash requires ctx_other to be set' is a benign warning, not an error: DFlash has no token_embd.weight and no output.weight because it borrows both from the target, so llama-server's memory-fitting probe -- which builds the draft context with no target -- always throws, and the server catches it and continues. The actual failure was the next line, 'unknown model architecture: muse-glimmer', which was the b10344 pin. Second, --model-draft ALONE DOES NOT ENABLE SPECULATION for a local file: the speculative type defaults to none and is only inferred for Hugging Face sidecar downloads, so the drafter loaded and was never used (upstream PR #26814). specType below supplies --spec-type. Verify it engaged by looking for 'adding speculative implementation' in the startup log, not by the absence of errors."
       },
       "gpu": {
         "minVramGiB": 12,
         "fullOffloadVramGiB": 24
       },
-      "warning": "Larger dynamic quantization for quality comparison. At 18.3 GiB it leaves materially less headroom on a 32 GB machine; keep context at 8192 until memory has been measured. Reasoning model, so maxOutputTokens is 3072 -- as much as 8192 of context can reserve for output and still leave room for history."
-    },
-    {
-      "id": "qwen3-coder-30b-a3b-iq2m",
-      "displayName": "Qwen3-Coder 30B-A3B \u2014 UD-IQ2_M (recommended)",
-      "shortName": "Qwen3-Coder 30B 2-bit",
-      "tier": "recommended",
-      "baseModel": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
-      "quantizer": "Unsloth Dynamic GGUF",
-      "quantization": "UD-IQ2_M",
-      "nominalBitClass": "2-bit",
-      "format": "GGUF",
-      "license": "Apache-2.0",
-      "fileName": "Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf",
-      "approximateSizeGiB": 10.1,
-      "expectedBytes": 10848017760,
-      "acceptedSha256": [
-        "0823c953beeda2db652da5839b94fbe08a75725d67bfcd093ca39ba8c1b47d41"
-      ],
-      "modelScopeModel": "unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF",
-      "downloadUrls": [
-        "https://www.modelscope.cn/models/unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF/resolve/master/Qwen3-Coder-30B-A3B-Instruct-1M-UD-IQ2_M.gguf"
-      ],
-      "minimumRamGiB": 24,
-      "recommendedRamGiB": 32,
-      "contextSize": 16384,
-      "batchSize": 512,
-      "ubatchSize": 128,
-      "maxOutputTokens": 2048,
-      "sampling": {
-        "temperature": 0.2,
-        "topP": 0.9,
-        "minP": 0.02,
-        "topK": 40,
-        "repeatPenalty": 1.0
-      },
-      "fim": true,
-      "warning": "Best balance in this repository. It is still an aggressive quantization; use the 4-bit profile when correctness is more important than RAM headroom."
-    },
-    {
-      "id": "qwen3-coder-30b-a3b-tq1",
-      "displayName": "Qwen3-Coder 30B-A3B \u2014 UD-TQ1_0 (ternary, experimental)",
-      "shortName": "Qwen3-Coder 30B ternary",
-      "tier": "experimental",
-      "baseModel": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
-      "quantizer": "Unsloth Dynamic GGUF",
-      "quantization": "UD-TQ1_0",
-      "nominalBitClass": "ternary / about 1-bit-class",
-      "format": "GGUF",
-      "license": "Apache-2.0",
-      "fileName": "Qwen3-Coder-30B-A3B-Instruct-1M-UD-TQ1_0.gguf",
-      "approximateSizeGiB": 7.52,
-      "expectedBytes": 8072846688,
-      "acceptedSha256": [
-        "f2d8e2c93e3b729df4eb27ee97f803ce95c8e498a7535f0da814aa413ddcda65"
-      ],
-      "modelScopeModel": "unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF",
-      "downloadUrls": [
-        "https://www.modelscope.cn/models/unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF/resolve/master/Qwen3-Coder-30B-A3B-Instruct-1M-UD-TQ1_0.gguf"
-      ],
-      "minimumRamGiB": 20,
-      "recommendedRamGiB": 28,
-      "contextSize": 8192,
-      "batchSize": 512,
-      "ubatchSize": 128,
-      "maxOutputTokens": 1536,
-      "sampling": {
-        "temperature": 0.15,
-        "topP": 0.9,
-        "minP": 0.02,
-        "topK": 40,
-        "repeatPenalty": 1.0
-      },
-      "fim": true,
-      "warning": "Use only when footprint is the overriding constraint. Ternary post-training quantization can disproportionately damage coding behavior and MoE experts."
-    },
-    {
-      "id": "qwen3-coder-30b-a3b-q4xl",
-      "displayName": "Qwen3-Coder 30B-A3B \u2014 UD-Q4_K_XL (quality-first)",
-      "shortName": "Qwen3-Coder 30B 4-bit",
-      "tier": "quality",
-      "baseModel": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
-      "quantizer": "Unsloth Dynamic GGUF",
-      "quantization": "UD-Q4_K_XL",
-      "nominalBitClass": "4-bit",
-      "format": "GGUF",
-      "license": "Apache-2.0",
-      "fileName": "Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q4_K_XL.gguf",
-      "approximateSizeGiB": 16.48,
-      "expectedBytes": 17690500448,
-      "acceptedSha256": [
-        "e71c9271166ad64865767022e86f45ea4f03a8258389460cc55c8d95e18833db"
-      ],
-      "modelScopeModel": "unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF",
-      "downloadUrls": [
-        "https://www.modelscope.cn/models/unsloth/Qwen3-Coder-30B-A3B-Instruct-1M-GGUF/resolve/master/Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q4_K_XL.gguf"
-      ],
-      "minimumRamGiB": 28,
-      "recommendedRamGiB": 32,
-      "contextSize": 8192,
-      "batchSize": 512,
-      "ubatchSize": 128,
-      "maxOutputTokens": 2048,
-      "sampling": {
-        "temperature": 0.2,
-        "topP": 0.9,
-        "minP": 0.02,
-        "topK": 40,
-        "repeatPenalty": 1.0
-      },
-      "fim": true,
-      "warning": "Likely to preserve coding quality better, but leaves less RAM for VS Code, the KV cache, and the operating system. Keep context at 8K initially."
-    },
-    {
-      "id": "qwen3-coder-next-tq1",
-      "displayName": "Qwen3-Coder-Next 80B-A3B \u2014 UD-TQ1_0 (edge experiment)",
-      "shortName": "Qwen3-Coder-Next ternary",
-      "tier": "edge",
-      "baseModel": "Qwen/Qwen3-Coder-Next",
-      "quantizer": "Unsloth Dynamic GGUF",
-      "quantization": "UD-TQ1_0",
-      "nominalBitClass": "ternary / about 1-bit-class",
-      "format": "GGUF",
-      "license": "Apache-2.0",
-      "fileName": "Qwen3-Coder-Next-UD-TQ1_0.gguf",
-      "approximateSizeGiB": 17.64,
-      "expectedBytes": 18941835296,
-      "acceptedSha256": [
-        "352049921f1dc861bf33fd03f5d2c25a08f248ee808179fe63ce16307357551c"
-      ],
-      "modelScopeModel": "unsloth/Qwen3-Coder-Next-GGUF",
-      "downloadUrls": [
-        "https://www.modelscope.cn/models/unsloth/Qwen3-Coder-Next-GGUF/resolve/master/Qwen3-Coder-Next-UD-TQ1_0.gguf"
-      ],
-      "minimumRamGiB": 32,
-      "recommendedRamGiB": 40,
-      "contextSize": 8192,
-      "batchSize": 256,
-      "ubatchSize": 64,
-      "maxOutputTokens": 1536,
-      "sampling": {
-        "temperature": 1.0,
-        "topP": 0.95,
-        "minP": 0.0,
-        "topK": 40,
-        "repeatPenalty": 1.0
-      },
-      "fim": true,
-      "warning": "Not the default for a 32 GB CPU laptop. The hybrid 80B-total architecture can be slow and leaves little safety margin; keep this for controlled comparison only."
+      "warning": "Larger dynamic quantization for quality comparison. At 18.3 GiB it leaves materially less headroom on a 32 GB machine; keep context at 8192 until memory has been measured. Reasoning model, so maxOutputTokens is 3072 -- as much as 8192 of context can reserve for output and still leave room for history.",
+      "repack": false
     }
   ]
 }

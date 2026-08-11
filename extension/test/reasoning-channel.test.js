@@ -187,3 +187,67 @@ test('the runtime never suppresses the reasoning channel at the server', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'runtimeManager.js'), 'utf8');
   assert.ok(!source.includes('--reasoning-format'), 'the runtime must not set --reasoning-format');
 });
+
+test('a reasoning block that arrives inline is stripped before it is stored', () => {
+  const { stripInlineReasoning } = require('../src/client');
+  // The failure this prevents: stored history is replayed on every later turn,
+  // so an unstripped block compounds until the context is mostly monologue.
+  assert.equal(stripInlineReasoning('<think>weighing it up</think>The answer.'), 'The answer.');
+  assert.equal(stripInlineReasoning('<think attr="x">a</think>\n\nB'), 'B');
+  assert.equal(stripInlineReasoning('plain answer'), 'plain answer');
+  // Code that merely mentions the tag in prose must survive untouched, since an
+  // unbalanced match would eat the rest of the reply.
+  assert.equal(stripInlineReasoning('use <think> carefully'), 'use <think> carefully');
+  assert.equal(stripInlineReasoning(undefined), '');
+});
+
+test('per-request reasoning strength is sent only where it can be used', () => {
+  const { reasoningOptions } = require('../src/client');
+  assert.deepEqual(reasoningOptions({ reasoning: true }, 'low'), {
+    chat_template_kwargs: { reasoning_strength: 'low' },
+  });
+  // A model with no analysis channel must never be handed a template argument.
+  assert.deepEqual(reasoningOptions({ fim: true }, 'low'), {});
+  assert.deepEqual(reasoningOptions({ reasoning: true }, undefined), {});
+  assert.deepEqual(reasoningOptions({ reasoning: true }, 'enormous'), {});
+});
+
+test('the SSE parser survives the heartbeat comment and a terminal error frame', async () => {
+  // llama-server emits a bare ":" comment after 30s of silence specifically
+  // because Node's fetch times out otherwise -- and at CPU prefill speeds we
+  // will see it on most requests.
+  const client = new LlamaClient({ baseUrl: 'http://127.0.0.1:1', apiKey: 'k' });
+  const raw =
+    ':\n\n' +
+    `data: ${JSON.stringify(delta({ role: 'assistant', content: null }))}\n\n` +
+    ':\n\n' +
+    `data: ${JSON.stringify(delta({ content: 'hi' }))}\n\n` +
+    'data: [DONE]\n\n';
+  const body = {
+    ok: true,
+    status: 200,
+    body: {
+      getReader() {
+        let sent = false;
+        return {
+          async read() {
+            if (sent) return { value: undefined, done: true };
+            sent = true;
+            return { value: new TextEncoder().encode(raw), done: false };
+          },
+        };
+      },
+    },
+  };
+  const result = await withFetch(async () => body, () => client.chatStream({ messages: [], profile: {} }));
+  assert.equal(result.text, 'hi');
+
+  // A stream can end with an error frame instead of a delta; it must surface.
+  await assert.rejects(
+    withFetch(
+      async () => streamResponse([{ error: { message: 'context shift failed' } }]),
+      () => client.chatStream({ messages: [], profile: {} })
+    ),
+    /context shift failed/
+  );
+});
