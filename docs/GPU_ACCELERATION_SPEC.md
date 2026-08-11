@@ -85,18 +85,62 @@ worth more than a 2× on work we can avoid entirely.
 
 ### 1. Establish what hardware the target machine actually has
 
-Everything else depends on it, and we do not know. Preflight already detects
-NVIDIA VRAM via `nvidia-smi`; extend it to enumerate **any** GPU, since Vulkan
-does not require NVIDIA. On Windows,
-`Get-CimInstance Win32_VideoController` gives adapter names and memory without
-admin rights. Report it in the preflight table.
+**Corrected 2026-08-11: the target machine has an INTEL GPU, not NVIDIA.** An
+earlier revision of this document claimed NVIDIA on an unverified basis and
+promoted CUDA to the primary backend. The user has since stated directly that it
+is Intel. **CUDA is out entirely** — it cannot run on Intel hardware, and its
+251 MB plus a 391 MB runtime pack were never shippable anyway.
+
+The Intel-capable backends, all with prebuilt Windows binaries:
+
+| Backend | Size | Notes |
+|---|---:|---|
+| **Vulkan** | 34 MB | Portable, works on Intel/AMD/NVIDIA. Only one small enough to ship in the VSIX. |
+| SYCL | 120 MB | Intel's native oneAPI path; often faster than Vulkan on Intel silicon. |
+| OpenVINO | 81 MB | Intel CPU/GPU/NPU. Newer Core Ultra parts have an NPU. |
+
+`nvidia-smi` detection is now useless for this machine. Preflight must enumerate
+**any** adapter — on Windows `Get-CimInstance Win32_VideoController` gives names
+and memory without admin rights.
+
+### The question that decides how much this is worth
+
+**Integrated Xe/UHD, or discrete Arc?** They are entirely different propositions:
+
+- **Integrated** shares system RAM, so it has the *same* memory bandwidth as the
+  CPU. Generation will not improve. Prefill is compute-bound and should improve,
+  which is still the right target since prefill is our binding constraint.
+- **Discrete Arc** (A770 16 GB, B-series 12 GB) has its own VRAM at several
+  hundred GB/s. That would lift *generation* too, potentially several-fold, and
+  a 12–16 GB card could hold most of a 17 GB model with `--n-cpu-moe` parking
+  the experts in system RAM.
+
+Establish which before sizing the effort. The adapter name from
+`Win32_VideoController` answers it.
+
+### Two consequences either way
+
+- **The context budget becomes hardware-conditional.** `context.maxCharacters`
+  was cut to what CPU prefill can afford. If GPU prefill is much faster, a budget
+  sized for 12.9 tok/s wastes the machine. Key it off the measured pp rate or a
+  preflight hardware tier, not one global constant.
+- **`--n-cpu-moe` applies only to the Qwen profiles.** Muse Glimmer is dense —
+  there are no expert tensors to park on the CPU. Its partial-offload story is
+  `-ngl N` plus, if needed, `--override-tensor`; its unusually small KV cache
+  (16:1 GQA) means more layers fit per GiB than the file size suggests.
 
 ### 2. Measure on the instance, in this order
 
-1. `--cache-reuse`, CPU only — the cheapest possible win.
+1. Fix the request shape first (see `RUNTIME_PERFORMANCE_SPEC.md` §0) — no
+   backend helps with prefill we can avoid entirely.
 2. Vulkan build, prefill and generation separately, against the CPU baseline.
-3. Vulkan plus `--n-cpu-moe`, sweeping N to find the VRAM/throughput knee.
-4. CUDA, only if the target turns out to have an NVIDIA card.
+3. SYCL against Vulkan on the same Intel hardware. Intel's native path is often
+   faster on Intel silicon, and 120 MB versus 34 MB is only worth paying if it
+   wins by a margin that matters.
+4. Vulkan or SYCL plus `--n-cpu-moe`, sweeping N for the knee — Qwen profiles
+   only, since Muse Glimmer is dense.
+
+CUDA is not on this list. The target hardware cannot run it.
 
 Report pp512 and tg128 for each, with VRAM consumed and the machine attached.
 
@@ -120,8 +164,13 @@ Constraints that do not relax:
   model: an optimisation may never prevent the thing from working.
 - 34 MB roughly triples the VSIX. Acceptable if it earns its size; not otherwise.
 
-CUDA stays `delivery: external`. At 251 MB plus a 391 MB cudart pack it cannot
-ship inside a VSIX, and it is only useful on machines that have an NVIDIA card.
+CUDA is removed from consideration: the target machine is Intel. The lock's
+`win32-x64-cuda` entry stays recorded as `delivery: external` for completeness
+but is not a deliverable.
+
+If SYCL wins materially over Vulkan it is 120 MB, which is too large to bundle
+alongside the CPU runtime — it would be `delivery: external`, fetched on demand,
+with the same digest verification. Prefer Vulkan unless the margin is large.
 
 ---
 
