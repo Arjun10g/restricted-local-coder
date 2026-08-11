@@ -1,6 +1,6 @@
 'use strict';
 
-const { TOOL_SCHEMAS, executeTool } = require('./tools');
+const { executeTool, toolSchemasFor } = require('./tools');
 
 const DEFAULT_MAX_STEPS = 8;
 
@@ -54,15 +54,20 @@ async function runAgentLoop({
   onEvent,
   reasoningStrength,
   spawn,
+  allowWrite = false,
+  applyEdit,
 }) {
   const conversation = [...messages];
   const steps = [];
+  // Shared across every step of this turn, so the write cap bounds the whole
+  // loop rather than resetting on each tool call.
+  const writeCounter = { count: 0 };
 
   for (let step = 0; step < maxSteps; step += 1) {
     const response = await client.chatWithTools({
       messages: conversation,
       profile,
-      tools: TOOL_SCHEMAS,
+      tools: toolSchemasFor({ allowWrite }),
       reasoningStrength,
       signal,
     });
@@ -120,6 +125,9 @@ async function runAgentLoop({
           confirm,
           audit,
           spawn,
+          allowWrite,
+          applyEdit,
+          writeCounter,
         });
       }
 

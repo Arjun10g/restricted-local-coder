@@ -116,6 +116,32 @@ assert.ok(agentTools.includes('isSensitivePath'), 'Agent file reads must honour 
 assert.ok(agentTools.includes('neutralizeContextMarkup'), 'Tool output re-enters the prompt and must be neutralized');
 assert.ok(!/\bexecSync\b|\bspawnSync\b/.test(agentTools), 'Agent tools must not use synchronous process helpers');
 
+// The write tools are the only part of the agent that changes the user's work.
+// Their safety rests on one property — every edit goes through the editor and
+// is therefore undoable — so that property is asserted rather than trusted.
+const writeTools = fs.readFileSync(path.join(agentRoot, 'writeTools.js'), 'utf8');
+assert.ok(settings['localCoder.agent.allowWrite'], 'Agent writing must be a declared, user-visible setting');
+assert.equal(settings['localCoder.agent.allowWrite'].default, false, 'Agent writing must be off by default');
+// Comments are stripped first: this file explains *why* it avoids fs.writeFile,
+// and matching that prose would fail the check on its own rationale.
+const withoutComments = (source) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+assert.ok(
+  !/\bfsp?\.(?:writeFile|appendFile|rm|unlink|rename|mkdir)\s*\(/.test(withoutComments(writeTools)),
+  'Write tools must never touch the filesystem directly; edits go through the editor so they stay undoable'
+);
+assert.ok(writeTools.includes('applyEdit'), 'Write tools must apply changes through the editor');
+assert.ok(writeTools.includes('isSensitivePath'), 'Write tools must honour the secret deny-list');
+assert.ok(writeTools.includes('PROTECTED_DIRECTORY'), 'Project memory must be protected from agent writes');
+// Editing the first of several matches is how the wrong call site gets
+// silently corrupted, so ambiguity must be a refusal.
+assert.ok(/appears \$\{occurrences\} times|occurrences > 1/.test(writeTools), 'edit_file must refuse an ambiguous match');
+
+const chatViewSource = fs.readFileSync(path.join(extensionRoot, 'src', 'chatView.js'), 'utf8');
+assert.ok(chatViewSource.includes('WorkspaceEdit'), 'Agent edits must be applied through a WorkspaceEdit');
+
+const auditSource = fs.readFileSync(path.join(agentRoot, 'auditLog.js'), 'utf8');
+assert.ok(auditSource.includes('CONTENT_KEYS'), 'The audit log must redact file contents rather than record them');
+
 const agentLoop = fs.readFileSync(path.join(agentRoot, 'agentLoop.js'), 'utf8');
 assert.ok(agentLoop.includes('maxSteps'), 'The agent loop must be bounded');
 // Every effect has to funnel through the one place permission is decided.

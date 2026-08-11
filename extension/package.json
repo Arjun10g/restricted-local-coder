@@ -414,6 +414,11 @@
           },
           "description": "Commands the agent may run in allowlist mode. Each entry is matched as an argv prefix, never as text, so \"npm test\" cannot authorise \"npm test; rm -rf ~\". This list replaces the built-in defaults rather than extending them."
         },
+        "localCoder.agent.allowWrite": {
+          "type": "boolean",
+          "default": false,
+          "description": "Let the agent create and edit workspace files. Off by default, and gated separately from running commands: permission to run the test suite is not permission to rewrite your source. Every change is applied through the editor so it appears in the undo history, edits must match their target text exactly once, and files under .localcoder/ plus any excluded secret path are never writable. In confirm mode each change is confirmed individually."
+        },
         "localCoder.agent.maxSteps": {
           "type": "integer",
           "default": 8,

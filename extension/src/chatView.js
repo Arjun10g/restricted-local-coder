@@ -238,6 +238,33 @@ class ChatViewProvider {
    * Runs one agent turn. Confirmation is asked of the user through a modal, so
    * a command in confirm mode cannot proceed on a webview message alone.
    */
+  /**
+   * Applies an agent file change through a WorkspaceEdit.
+   *
+   * This is the single reason the write tools are safe to offer: a change made
+   * this way lands in the editor's undo stack, so a wrong edit is Ctrl+Z rather
+   * than data loss. Writing through the filesystem would be simpler and is
+   * deliberately not done.
+   */
+  async applyAgentEdit({ file, content, existed }) {
+    const uri = vscode.Uri.file(file);
+    const edit = new vscode.WorkspaceEdit();
+    if (!existed) {
+      edit.createFile(uri, { overwrite: false, ignoreIfExists: true });
+      edit.insert(uri, new vscode.Position(0, 0), content);
+    } else {
+      const document = await vscode.workspace.openTextDocument(uri);
+      const whole = new vscode.Range(
+        document.positionAt(0),
+        document.positionAt(document.getText().length)
+      );
+      edit.replace(uri, whole, content);
+    }
+    const applied = await vscode.workspace.applyEdit(edit);
+    if (applied) this.output.appendLine(`[agent] applied edit to ${file}`);
+    return applied;
+  }
+
   async runAgentTurn({ client, messages, profile, requestId, mode, reasoningStrength, signal }) {
     const config = vscode.workspace.getConfiguration('localCoder');
     const workspacePath = this.workspacePath();
@@ -253,15 +280,21 @@ class ChatViewProvider {
       reasoningStrength,
       rules: config.get('agent.allowedCommands', []),
       maxSteps: config.get('agent.maxSteps', 8),
+      allowWrite: config.get('agent.allowWrite', false),
+      applyEdit: (edit) => this.applyAgentEdit(edit),
       audit: this.audit.recorder(),
       signal,
-      confirm: async ({ argv }) => {
-        const answer = await vscode.window.showWarningMessage(
-          `Local Coder wants to run: ${argv.join(' ')}`,
-          { modal: true, detail: `Working directory: ${workspacePath}` },
-          'Run once'
-        );
-        return answer === 'Run once';
+      confirm: async ({ tool, argv, args }) => {
+        const isWrite = tool === 'write_file' || tool === 'edit_file';
+        const message = isWrite
+          ? `Local Coder wants to modify: ${args?.path}`
+          : `Local Coder wants to run: ${argv.join(' ')}`;
+        const detail = isWrite
+          ? 'The change will appear in the editor and can be undone with Ctrl+Z.'
+          : `Working directory: ${workspacePath}`;
+        const accept = isWrite ? 'Apply once' : 'Run once';
+        const answer = await vscode.window.showWarningMessage(message, { modal: true, detail }, accept);
+        return answer === accept;
       },
       onEvent: (event) => {
         if (event.type === 'toolStart') {

@@ -15,6 +15,10 @@
 const MAX_ENTRIES = 500;
 const MAX_SUMMARY = 300;
 
+// Argument names that carry file contents rather than identifiers. Summarised
+// by size only.
+const CONTENT_KEYS = new Set(['content', 'old_text', 'new_text']);
+
 function summarizeArguments(tool, args) {
   if (tool === 'run_command') {
     const argv = Array.isArray(args?.command) ? args.command : [];
@@ -23,6 +27,14 @@ function summarizeArguments(tool, args) {
   if (args && typeof args === 'object') {
     const parts = [];
     for (const [key, value] of Object.entries(args)) {
+      // File contents must never reach the log. The audit exists to answer
+      // "what did it touch", and the read tools deliberately keep source out of
+      // places like this — a write tool that logged content would undo that.
+      if (CONTENT_KEYS.has(key)) {
+        const size = typeof value === 'string' ? Buffer.byteLength(value, 'utf8') : 0;
+        parts.push(`${key}=<${size} bytes>`);
+        continue;
+      }
       parts.push(`${key}=${typeof value === 'string' ? value : JSON.stringify(value)}`);
     }
     return parts.join(' ').slice(0, MAX_SUMMARY);

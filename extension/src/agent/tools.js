@@ -4,7 +4,13 @@ const childProcess = require('node:child_process');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { isLikelySourcePath, isSensitivePath, neutralizeContextMarkup } = require('../contextRules');
-const { evaluate, resolveInsideWorkspace } = require('./permissions');
+const { evaluate, isWriteTool, resolveInsideWorkspace } = require('./permissions');
+const {
+  MAX_WRITES_PER_TURN,
+  WRITE_TOOL_SCHEMAS,
+  editFileTool,
+  writeFileTool,
+} = require('./writeTools');
 
 const MAX_FILE_CHARACTERS = 20_000;
 const MAX_LISTED_ENTRIES = 200;
@@ -232,20 +238,53 @@ function runCommandTool(workspacePath, argv, { timeoutMs = COMMAND_TIMEOUT_MS, s
 /**
  * Executes one tool call, enforcing permission before any effect.
  */
-async function executeTool({ name, args, workspacePath, mode, rules, confirm, spawn, env, audit }) {
+async function executeTool({
+  name,
+  args,
+  workspacePath,
+  mode,
+  rules,
+  confirm,
+  spawn,
+  env,
+  audit,
+  allowWrite = false,
+  applyEdit,
+  writeCounter,
+}) {
   if (!workspacePath) return refuse('no workspace folder is open.');
   const argv = name === 'run_command' ? (Array.isArray(args?.command) ? args.command : []) : [];
-  const decision = evaluate({ mode, tool: name, argv, rules });
+  const decision = evaluate({ mode, tool: name, argv, rules, allowWrite });
   if (!decision.allowed) {
     audit?.({ tool: name, args, outcome: 'denied', reason: decision.reason });
     return refuse(decision.reason);
   }
-  if (decision.needsConfirmation) {
-    const approved = await confirm?.({ tool: name, argv });
-    if (!approved) {
-      audit?.({ tool: name, args, outcome: 'declined', reason: 'The user declined this command.' });
-      return refuse('the user declined this command.');
+
+  // Bound the blast radius of a runaway loop before anything is written.
+  if (isWriteTool(name) && writeCounter) {
+    if (writeCounter.count >= MAX_WRITES_PER_TURN) {
+      const reason = `this turn already changed ${MAX_WRITES_PER_TURN} files, which is the limit.`;
+      audit?.({ tool: name, args, outcome: 'denied', reason });
+      return refuse(reason);
     }
+  }
+
+  if (decision.needsConfirmation) {
+    const approved = await confirm?.({ tool: name, argv, args });
+    if (!approved) {
+      audit?.({ tool: name, args, outcome: 'declined', reason: 'The user declined this action.' });
+      return refuse('the user declined this action.');
+    }
+  }
+
+  if (isWriteTool(name)) {
+    if (typeof applyEdit !== 'function') {
+      // Refusing is correct rather than falling back to a direct write: an edit
+      // that bypasses the editor is not undoable, which is the property this
+      // whole design exists to preserve.
+      return refuse('no editor is available to apply the change, and writes never bypass the editor.');
+    }
+    if (writeCounter) writeCounter.count += 1;
   }
 
   audit?.({ tool: name, args, outcome: 'allowed', reason: '' });
@@ -256,6 +295,10 @@ async function executeTool({ name, args, workspacePath, mode, rules, confirm, sp
       return listFilesTool(workspacePath, args);
     case 'search_files':
       return searchFilesTool(workspacePath, args);
+    case 'write_file':
+      return writeFileTool(workspacePath, args, { applyEdit });
+    case 'edit_file':
+      return editFileTool(workspacePath, args, { applyEdit });
     case 'run_command':
       if (argv.length === 0) return refuse('run_command needs a non-empty argv array.');
       return runCommandTool(workspacePath, argv, { spawn, env });
@@ -264,12 +307,18 @@ async function executeTool({ name, args, workspacePath, mode, rules, confirm, sp
   }
 }
 
+function toolSchemasFor({ allowWrite = false } = {}) {
+  return allowWrite ? [...TOOL_SCHEMAS, ...WRITE_TOOL_SCHEMAS] : [...TOOL_SCHEMAS];
+}
+
 module.exports = {
   COMMAND_TIMEOUT_MS,
   MAX_COMMAND_OUTPUT,
   MAX_FILE_CHARACTERS,
   TOOL_SCHEMAS,
+  WRITE_TOOL_SCHEMAS,
   executeTool,
+  toolSchemasFor,
   listFilesTool,
   readFileTool,
   runCommandTool,

@@ -107,11 +107,41 @@ function normalizeMode(mode) {
  * confirming it, so a prompt is only ever offered for something already
  * permitted by the mode.
  */
-function evaluate({ mode, tool, argv, rules }) {
+// Tools that change the user's files. Gated separately from command execution,
+// because "may run the test suite" and "may rewrite my source" are different
+// decisions and should not be bundled into one setting.
+const WRITE_TOOLS = new Set(['write_file', 'edit_file']);
+
+function isWriteTool(tool) {
+  return WRITE_TOOLS.has(tool);
+}
+
+function evaluate({ mode, tool, argv, rules, allowWrite = false }) {
   const effective = normalizeMode(mode);
   if (effective === 'off') {
     return { allowed: false, needsConfirmation: false, reason: 'Agent mode is disabled.' };
   }
+
+  if (isWriteTool(tool)) {
+    // Readonly means readonly, whatever allowWrite says.
+    if (effective === 'readonly') {
+      return { allowed: false, needsConfirmation: false, reason: 'File editing is disabled in readonly mode.' };
+    }
+    if (!allowWrite) {
+      return {
+        allowed: false,
+        needsConfirmation: false,
+        reason: 'File editing is disabled. Set localCoder.agent.allowWrite to true to enable it.',
+      };
+    }
+    // In confirm mode every write is confirmed, exactly as every command is.
+    return {
+      allowed: true,
+      needsConfirmation: effective === 'confirm',
+      reason: effective === 'confirm' ? 'Every file change requires confirmation in confirm mode.' : '',
+    };
+  }
+
   if (tool !== 'run_command') {
     // Reading is bounded by the workspace root and the secret deny-list, both
     // enforced at the tool itself rather than here.
@@ -136,7 +166,9 @@ function evaluate({ mode, tool, argv, rules }) {
 module.exports = {
   DEFAULT_COMMAND_RULES,
   MODES,
+  WRITE_TOOLS,
   evaluate,
+  isWriteTool,
   isCommandAllowed,
   matchesRule,
   normalizeMode,
