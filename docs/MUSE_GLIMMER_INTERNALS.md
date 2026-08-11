@@ -137,3 +137,84 @@ long-context work rather than a curiosity.
 - `reasoning_strength: low` — measured 4.2× faster to the first word with a
   *longer* answer.
 - Never stop on `<|eom|>`.
+
+---
+
+## What the model card actually claims, read directly
+
+Fetched from the publisher's GGUF card and the Meta research blog, 2026-08-11.
+
+### The published baselines are all GPU or Apple-silicon
+
+| Hardware | baseline | with DFlash | speedup |
+|---|---:|---:|---:|
+| RTX 5090 | 74.9 tok/s | 233.4 tok/s | 3.1× |
+| Apple M5 Max | 26.6 | 50.2 | 1.8× |
+| Apple M4 Max | 23.7 | 37.8 | 1.5× |
+| **our CPU box** | **4.45** | not measured | — |
+
+**Crucially: the Apple figures were measured with ExecuTorch, not llama.cpp.**
+Only the RTX number is a llama.cpp result. So **there is no published llama.cpp
+CPU number for DFlash anywhere** — the closest analogue to our hardware was
+measured on a different runtime.
+
+Those baselines also validate the bandwidth model. Dividing published throughput
+into the 16.75 GB file gives 1,254 GB/s effective for the 5090 and 397 GB/s for
+the M4 Max — roughly 70% of each machine's rated bandwidth, the same efficiency
+factor our own 4.45 tok/s implies. The model behaves exactly as a dense
+bandwidth-bound model should. It is not underperforming; we are running it on a
+machine with an order of magnitude less bandwidth than its target.
+
+Every command on the card uses `-ngl 99`. **There is no CPU guidance at all.**
+
+### DFlash is unusually well suited to bandwidth-bound hardware
+
+From the drafter card: it "predicts entire blocks of 16 tokens in a single
+forward pass. The main model then verifies these proposals in parallel."
+
+That matters more on CPU than the 1.5× Apple figure suggests, because on
+bandwidth-bound hardware **verifying 16 tokens costs one target forward pass —
+the same bytes as generating one token**. The drafter is 1.63 GB against the
+target's 16.75 GB, so it adds about 10%.
+
+Bandwidth cost per accepted token, at our measured ~75 GB/s:
+
+| accepted of 16 | GB/token | speedup | implied tok/s |
+|---:|---:|---:|---:|
+| 8 | 2.30 | 7.3× | 32.6 |
+| 6 | 3.06 | 5.5× | 24.5 |
+| **4** | **4.59** | **3.6×** | **16.3** |
+| 2 | 9.19 | 1.8× | 8.2 |
+| 1 | 18.38 | 0.9× | slower |
+
+The RTX result implies roughly 4 accepted per block. **If CPU acceptance is
+similar, Muse Glimmer lands near 16 tok/s** — within range of Qwen3-Coder's 19,
+while scoring 76.0 on SWE-bench Verified against Qwen's 51.6.
+
+The caveat that could kill it: verifying 16 positions is more *compute* than
+verifying one, and a CPU is compute-poor. The bandwidth saving is real; whether
+compute eats it is exactly what must be measured.
+
+**We never measured this.** Our only attempt omitted `--spec-type`, so
+speculation never engaged and the result was withdrawn as invalid.
+
+### Other card details worth keeping
+
+- Drafter: 5 layers, sliding window 2048 on **all** layers, 32 Q / 8 KV heads.
+- The card's own invocation is `-md dflash-kquant.gguf -ngld 99` with no
+  `--spec-type`. Since upstream only auto-infers the speculative type for
+  Hugging Face sidecar downloads, pass `--spec-type draft-dflash` explicitly for
+  a local file.
+- `-c 131072 -np 4` means 32k per slot; the card warns to scale `-c` with `-np`.
+- Full precision is 55+ GB, quantised to under 20 GB.
+
+### The open question this creates
+
+If DFlash on CPU lands anywhere near 3× acceptance-limited speedup, the model
+choice is worth revisiting: a 76.0-SWE-bench model at ~16 tok/s beats a
+51.6-SWE-bench model at 19 tok/s for most work. Combined with
+`reasoning_strength: low` — measured at 27 s to first word, and DFlash would cut
+that too — Muse Glimmer becomes competitive rather than unusable.
+
+**This is one experiment, on one rented box, and it is the highest-value
+unmeasured thing left.**
