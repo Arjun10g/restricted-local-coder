@@ -153,7 +153,13 @@ class ContextBuilder {
     const maxCharacters = config.get('context.maxCharacters', 48000);
     const maxRetrieved = config.get('context.maxRetrievedFiles', 5);
     const active = selectedAndNearby(editor);
+    // Two accumulators, because position in the prompt decides whether a block
+    // can be cached. `blocks` is the stable prefix: project memory, retrieved
+    // files, open editors. `volatile` is the selection and diagnostics, which
+    // change on almost every keystroke and would truncate the reusable region
+    // at their first differing byte if they sat in the prefix.
     const blocks = [];
+    const volatile = [];
     const sources = [];
     const included = new Set();
 
@@ -163,10 +169,10 @@ class ContextBuilder {
       const note = active.selection
         ? `explicit selection; nearby lines ${active.startLine + 1}-${active.endLine + 1}`
         : `near cursor; lines ${active.startLine + 1}-${active.endLine + 1}`;
-      blocks.push(fileBlock(active.path, truncateText(primary, Math.floor(maxCharacters * 0.45)), active.language, note));
+      volatile.push(fileBlock(active.path, truncateText(primary, Math.floor(maxCharacters * 0.45)), active.language, note));
       sources.push(active.path);
       if (active.selection && active.nearby !== active.selection) {
-        blocks.push(
+        volatile.push(
           fileBlock(
             active.path,
             truncateText(active.nearby, Math.floor(maxCharacters * 0.25)),
@@ -178,7 +184,7 @@ class ContextBuilder {
       if (config.get('context.includeDiagnostics', true)) {
         const diagnostics = diagnosticText(editor.document.uri);
         if (diagnostics) {
-          blocks.push(`<diagnostics file="${active.path.replace(/["<>]/g, '_')}">\n${neutralizeContextMarkup(diagnostics)}\n</diagnostics>`);
+          volatile.push(`<diagnostics file="${active.path.replace(/["<>]/g, '_')}">\n${neutralizeContextMarkup(diagnostics)}\n</diagnostics>`);
         }
       }
     }
@@ -219,8 +225,14 @@ class ContextBuilder {
       sources.push(`${MEMORY_DIRECTORY}/${MEMORY_FILE}`);
     }
 
-    const contextText = truncateText(blocks.join('\n\n'), maxCharacters);
-    const system = [
+    // Budgets are split so a large volatile selection cannot crowd out the
+    // stable prefix, and so the prefix stays the same size turn to turn.
+    const stableBudget = Math.floor(maxCharacters * 0.7);
+    const volatileBudget = maxCharacters - stableBudget;
+    const contextText = truncateText(blocks.join('\n\n'), stableBudget);
+    const volatileText = truncateText(volatile.join('\n\n'), volatileBudget);
+
+    const rules = [
       'You are a private local coding assistant running entirely on the developer machine.',
       'Give technically correct, executable guidance. Prefer a focused patch or complete function over vague advice.',
       'Preserve the project language, style, public APIs, and error-handling conventions unless the user asks to change them.',
@@ -230,10 +242,35 @@ class ContextBuilder {
       'Do not request or expose credentials. Do not invent files, symbols, dependencies, or command output.',
       'For a code review, prioritize correctness, security, data loss, concurrency, and missing tests; cite file paths and line numbers when available.',
     ].join(' ');
-    const user = contextText
-      ? `${query}\n\n<workspace_context>\n${contextText}\n</workspace_context>`
-      : query;
-    return { system, user, sources: unique(sources) };
+
+    /*
+     * The stable context is returned attached to the SYSTEM message rather than
+     * embedded in the user turn.
+     *
+     * Position decides whether any of it can be reused. Previously the whole
+     * workspace block sat inside the final user message, after the growing
+     * history, so two consecutive requests shared only the system prompt as a
+     * common prefix and multi-thousand-token context was re-processed every turn
+     * even when byte-identical. Anchored before the history, each turn becomes a
+     * pure append, which the server's KV cache reuses — including on a
+     * sliding-window model, where shifted-chunk reuse would otherwise need
+     * checkpoints.
+     *
+     * The trade is that untrusted workspace text now sits in the system role.
+     * The mitigations are unchanged and deliberately adjacent: the text stays
+     * inside <workspace_context>, the instruction naming it untrusted is in the
+     * same message, and neutralizeContextMarkup has already made those tags
+     * uncloseable by file content.
+     */
+    const system = contextText
+      ? `${rules}\n\n<workspace_context>\n${contextText}\n</workspace_context>`
+      : rules;
+
+    // Volatile blocks ride with the question, at the end, where changing them
+    // costs only their own tokens.
+    const user = volatileText ? `${query}\n\n<editor_state>\n${volatileText}\n</editor_state>` : query;
+
+    return { system, user, sources: unique(sources), contextText, volatileText };
   }
 }
 

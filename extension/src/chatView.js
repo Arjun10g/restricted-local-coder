@@ -34,6 +34,8 @@ class ChatViewProvider {
     this.activeController = null;
     this.store = new ConversationStore(context.globalStorageUri?.fsPath ?? context.globalStoragePath, outputChannel);
     this.restored = false;
+    // Pinned for the conversation so every turn is a pure prefix append.
+    this.systemSnapshot = null;
     this.audit = new AuditLog(outputChannel);
     this.runtimeSubscription = this.runtime.onDidChangeState((state) => this.postStatus(state));
   }
@@ -173,6 +175,7 @@ class ChatViewProvider {
         this.cancel();
         this.history = [];
         this.lastResponse = '';
+        this.systemSnapshot = null;
         // Clearing must remove the stored transcript too, whatever the current
         // setting says. Leaving a file behind that a later session would restore
         // would make "clear" untrue.
@@ -345,9 +348,26 @@ class ChatViewProvider {
       if (context.sources.length > 0) {
         this.post({ type: 'sources', id: requestId, sources: context.sources });
       }
+
+      /*
+       * The stable half of the prompt is snapshotted for the conversation.
+       *
+       * Retrieval is query-dependent, so rebuilding it every turn produces a
+       * different prefix every turn and the server's KV cache misses even
+       * though the request looks nearly identical. Pinning it means turn two
+       * is a pure append, which is reused with no server flags at all.
+       *
+       * It is refreshed when the conversation is cleared, so a user who has
+       * moved on to different files starts from a context that reflects that.
+       */
+      if (!this.systemSnapshot) {
+        this.systemSnapshot = context.system;
+      }
+      const systemText = this.systemSnapshot;
+
       const messages = [
-        { role: 'system', content: context.system },
-        ...this.boundedHistory({ systemText: context.system, userText: context.user }),
+        { role: 'system', content: systemText },
+        ...this.boundedHistory({ systemText, userText: context.user }),
         { role: 'user', content: context.user },
       ];
       const profile = this.models.getSelectedProfile();
