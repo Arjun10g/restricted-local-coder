@@ -150,6 +150,45 @@ function reasoningOptions(profile, strength) {
   return { chat_template_kwargs: { reasoning_strength: wanted } };
 }
 
+/**
+ * Median and 95th percentile of the gaps between answer tokens.
+ *
+ * The median is what the stream feels like; the tail is what makes a session
+ * frustrating. A mean hides both, which is why neither is reported alone.
+ */
+function summarizeLatency(gaps, startedAt, firstTokenAt) {
+  const sorted = [...gaps].sort((a, b) => a - b);
+  const at = (fraction) => (sorted.length === 0 ? null : sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))]);
+  return {
+    tokens: gaps.length + (firstTokenAt === null ? 0 : 1),
+    timeToFirstTokenMs: firstTokenAt === null ? null : firstTokenAt - startedAt,
+    medianMsPerToken: at(0.5),
+    p95MsPerToken: at(0.95),
+  };
+}
+
+/**
+ * One quiet line describing what the run cost. Prefill is reported separately
+ * from generation because on this hardware they differ by an order of magnitude
+ * and a single combined figure would hide which one the user is waiting on.
+ */
+function formatTelemetry({ timings, latency } = {}) {
+  const parts = [];
+  if (latency?.tokens) parts.push(`${latency.tokens} tokens`);
+  if (timings?.predicted_per_second) parts.push(`${timings.predicted_per_second.toFixed(1)} tok/s`);
+  if (latency?.medianMsPerToken !== null && latency?.medianMsPerToken !== undefined) {
+    const tail = latency.p95MsPerToken !== null ? `, p95 ${latency.p95MsPerToken}ms` : '';
+    parts.push(`${latency.medianMsPerToken}ms/token${tail}`);
+  }
+  if (latency?.timeToFirstTokenMs !== null && latency?.timeToFirstTokenMs !== undefined) {
+    parts.push(`${(latency.timeToFirstTokenMs / 1000).toFixed(1)}s to first token`);
+  }
+  if (timings?.prompt_n && timings?.prompt_per_second) {
+    parts.push(`prompt ${timings.prompt_n} @ ${timings.prompt_per_second.toFixed(1)} tok/s`);
+  }
+  return parts.join(' · ');
+}
+
 class LlamaClient {
   constructor({ baseUrl, apiKey, modelAlias = 'local-coder' }) {
     this.baseUrl = String(baseUrl).replace(/\/$/, '');
@@ -172,7 +211,7 @@ class LlamaClient {
     return response.json();
   }
 
-  async chatStream({ messages, profile, signal, onToken, onReasoning, maxTokens, reasoningStrength }) {
+  async chatStream({ messages, profile, signal, onToken, onReasoning, onProgress, maxTokens, reasoningStrength }) {
     throwIfAborted(signal);
     const sampling = profile?.sampling ?? {};
     const body = {
@@ -187,6 +226,12 @@ class LlamaClient {
       min_p: sampling.minP ?? 0.02,
       repeat_penalty: sampling.repeatPenalty ?? 1.0,
       cache_prompt: true,
+      // Server-side timings, so throughput is reported from where it is
+      // actually measured rather than inferred from arrival times.
+      timings_per_token: true,
+      // Prefill is the binding constraint on a CPU machine and it is otherwise
+      // completely silent; this turns a dead wait into visible progress.
+      return_progress: true,
     };
 
     const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
@@ -208,6 +253,13 @@ class LlamaClient {
     let output = '';
     let reasoning = '';
     let usage = null;
+    let timings = null;
+    // Arrival times of answer tokens, for the latency the user actually feels.
+    // The server's own timings give throughput; they cannot describe jitter.
+    const gaps = [];
+    let previousAt = null;
+    let firstTokenAt = null;
+    const startedAt = Date.now();
 
     // Deliberately two accumulators. Appending reasoning to `output` would put
     // the model's scratchpad into the chat history, the persisted transcript,
@@ -247,7 +299,16 @@ class LlamaClient {
           throw new LlamaHttpError(extractErrorMessage(event, 'Generation failed'), response.status, event);
         }
         usage = event.usage ?? usage;
+        timings = event.timings ?? timings;
+        if (event.prompt_progress) onProgress?.(event.prompt_progress);
+        const before = output.length;
         consume(event.choices?.[0]?.delta);
+        if (output.length > before) {
+          const now = Date.now();
+          if (firstTokenAt === null) firstTokenAt = now;
+          else gaps.push(now - previousAt);
+          previousAt = now;
+        }
       }
 
       if (done) break;
@@ -262,7 +323,7 @@ class LlamaClient {
       }
     }
 
-    return { text: output, reasoning, usage };
+    return { text: output, reasoning, usage, timings, latency: summarizeLatency(gaps, startedAt, firstTokenAt) };
   }
 
   /**
@@ -368,6 +429,8 @@ class LlamaClient {
 
 module.exports = {
   DEFAULT_FIM_TEMPLATE,
+  summarizeLatency,
+  formatTelemetry,
   LlamaClient,
   LlamaHttpError,
   buildFimPrompt,

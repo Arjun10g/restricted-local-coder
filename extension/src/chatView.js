@@ -4,7 +4,7 @@ const crypto = require('node:crypto');
 const vscode = require('vscode');
 const { isAbortError, safeErrorMessage } = require('./util');
 const { isSensitivePath } = require('./contextRules');
-const { stripInlineReasoning } = require('./client');
+const { formatTelemetry, stripInlineReasoning } = require('./client');
 const { ConversationStore } = require('./conversationStore');
 const { availableHistoryTokens, selectHistory } = require('./historyBudget');
 const { AuditLog } = require('./agent/auditLog');
@@ -384,6 +384,17 @@ class ChatViewProvider {
           maxTokens: this.maxOutputTokens(profile),
           reasoningStrength: this.reasoningStrength(profile, options.callSite),
           signal: controller.signal,
+          onProgress: (progress) => {
+            const done = progress?.processed ?? progress?.n_past;
+            const total = progress?.total ?? progress?.n_prompt_tokens;
+            if (done && total) {
+              this.post({
+                type: 'progress',
+                id: requestId,
+                text: `Reading context: ${Math.round((done / total) * 100)}%`,
+              });
+            }
+          },
           onToken: (token) => {
             assistant += token;
             this.post({ type: 'assistantToken', id: requestId, token });
@@ -437,7 +448,16 @@ class ChatViewProvider {
         );
         await this.persistHistory();
       }
-      this.post({ type: 'assistantDone', id: requestId, usage: result.usage ?? null });
+      // One quiet line, and the same to the log so a slow session can be
+      // diagnosed afterwards rather than re-run.
+      const telemetry = formatTelemetry(result);
+      if (telemetry) this.output.appendLine(`[chat] ${telemetry}`);
+      this.post({
+        type: 'assistantDone',
+        id: requestId,
+        usage: result.usage ?? null,
+        telemetry: telemetry || null,
+      });
       return assistant;
     } catch (error) {
       if (isAbortError(error) || controller.signal.aborted) {
@@ -542,6 +562,7 @@ class ChatViewProvider {
     .bubble { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.46; padding: 9px 10px; border-radius: 5px; background: var(--vscode-editor-background); border: 1px solid var(--vscode-widget-border, transparent); font-family: var(--vscode-editor-font-family); font-size: var(--vscode-editor-font-size); }
     .message.user .bubble { border-left: 3px solid var(--vscode-focusBorder); }
     .message.error .bubble { border-left: 3px solid var(--vscode-testing-iconFailed); color: var(--vscode-errorForeground); }
+    .telemetry { font-size: 11px; opacity: 0.55; margin-top: 4px; font-variant-numeric: tabular-nums; }
     .sources { color: var(--vscode-descriptionForeground); font-size: 10px; overflow-wrap: anywhere; }
     .reasoning { border-left: 2px solid var(--vscode-widget-border, var(--vscode-panel-border)); }
     .reasoning > summary { cursor: pointer; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--vscode-descriptionForeground); padding: 2px 0 2px 8px; }
@@ -735,7 +756,20 @@ class ChatViewProvider {
           if (element?.reasoning) {
             element.reasoning.summary.textContent = 'Thought for ' + element.reasoning.tokens + ' chunks';
           }
+          if (data.telemetry && element?.root) {
+            const line = document.createElement('div');
+            line.className = 'telemetry';
+            line.textContent = data.telemetry;
+            element.root.append(line);
+          }
           active.delete(data.id); setBusy(false); prompt.focus(); break;
+        }
+        case 'progress': {
+          const element = active.get(data.id);
+          if (element?.bubble && !element.bubble.textContent) {
+            element.bubble.textContent = data.text;
+          }
+          break;
         }
         case 'assistantCancelled': {
           const element = active.get(data.id);
